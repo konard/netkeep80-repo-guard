@@ -85,10 +85,16 @@ Operational paths (bot-артефакты) исключаются из всех 
 
 ### Установка
 
+Рекомендуемый способ — установить как глобальный CLI через npm:
+
 ```bash
-git clone https://github.com/netkeep80/repo-guard.git
-cd repo-guard
-npm install
+npm install -g repo-guard
+```
+
+Или запустить без предварительной установки через npx:
+
+```bash
+npx repo-guard
 ```
 
 Требования: Node.js ≥ 20.
@@ -96,15 +102,20 @@ npm install
 ### Валидация policy
 
 ```bash
-node src/repo-guard.mjs
+repo-guard
 ```
 
 Проверяет `repo-policy.json` в текущей директории по JSON Schema. Выводит `OK` или список ошибок.
 
+```bash
+# Через npx (без глобальной установки)
+npx repo-guard
+```
+
 ### Валидация change contract
 
 ```bash
-node src/repo-guard.mjs path/to/contract.json
+repo-guard path/to/contract.json
 ```
 
 Проверяет и policy, и contract по соответствующим схемам.
@@ -113,19 +124,19 @@ node src/repo-guard.mjs path/to/contract.json
 
 ```bash
 # Проверить staged изменения (или HEAD если staged пуст)
-node src/repo-guard.mjs check-diff
+repo-guard check-diff
 
 # Проверить diff между ветками
-node src/repo-guard.mjs check-diff --base main --head feature
+repo-guard check-diff --base main --head feature
 
 # Проверить diff с change contract
-node src/repo-guard.mjs check-diff --contract path/to/contract.json
+repo-guard check-diff --contract path/to/contract.json
 ```
 
 ### Проверка PR (в GitHub Actions)
 
 ```bash
-node src/repo-guard.mjs check-pr
+repo-guard check-pr
 ```
 
 Требования для `check-pr`:
@@ -140,16 +151,16 @@ node src/repo-guard.mjs check-pr
 
 ```bash
 # validate
-node src/repo-guard.mjs --repo-root /path/to/other/repo
-node src/repo-guard.mjs --repo-root /path/to/other/repo contract.json
+repo-guard --repo-root /path/to/other/repo
+repo-guard --repo-root /path/to/other/repo contract.json
 
 # check-diff (--repo-root до или после команды)
-node src/repo-guard.mjs --repo-root /path/to/other/repo check-diff --base main --head feature
-node src/repo-guard.mjs check-diff --repo-root /path/to/other/repo --base main --head feature
+repo-guard --repo-root /path/to/other/repo check-diff --base main --head feature
+repo-guard check-diff --repo-root /path/to/other/repo --base main --head feature
 
 # check-pr (--repo-root до или после команды)
-node src/repo-guard.mjs --repo-root /path/to/other/repo check-pr
-node src/repo-guard.mjs check-pr --repo-root /path/to/other/repo
+repo-guard --repo-root /path/to/other/repo check-pr
+repo-guard check-pr --repo-root /path/to/other/repo
 ```
 
 Флаг `--repo-root` указывает, где искать `repo-policy.json` и выполнять git-операции. Схемы загружаются из пакета `repo-guard`.
@@ -159,6 +170,37 @@ node src/repo-guard.mjs check-pr --repo-root /path/to/other/repo
 ```bash
 npm test
 ```
+
+## Миграция с source-run на установленный CLI
+
+До версии 1.0.0 рекомендованный способ запуска был через клонирование репозитория:
+
+```bash
+git clone https://github.com/netkeep80/repo-guard.git
+cd repo-guard
+npm install
+node src/repo-guard.mjs
+```
+
+Начиная с версии 1.0.0 рекомендуется использовать установленный CLI.
+
+**Шаги миграции:**
+
+1. Удалите клонированный репозиторий из зависимостей вашего проекта (если он был добавлен как submodule или вручную).
+2. Установите пакет глобально или через npx:
+   ```bash
+   npm install -g repo-guard
+   # или используйте npx repo-guard без установки
+   ```
+3. Замените вызовы `node src/repo-guard.mjs` на `repo-guard` во всех скриптах и CI конфигурациях:
+   ```yaml
+   # Было:
+   run: node src/repo-guard.mjs check-pr
+   # Стало:
+   run: npx repo-guard check-pr
+   ```
+
+Все флаги и команды (`check-diff`, `check-pr`, `--repo-root`, `--base`, `--head`, `--contract`) остаются без изменений — миграция сводится к замене команды запуска.
 
 ## Минимальный пример
 
@@ -259,7 +301,7 @@ Summary: 8 passed, 0 failed
 ```yaml
 - name: Run PR policy check
   if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-  run: node src/repo-guard.mjs check-pr
+  run: npx repo-guard check-pr
   env:
     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```

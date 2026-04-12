@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
 
       - name: Validate repo-policy.json
-        run: node src/repo-guard.mjs
+        run: npx repo-guard
 
       - name: Run schema tests
         run: npm run test:schemas
@@ -44,6 +44,6 @@ jobs:
 
       - name: Run PR policy check
         if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-        run: node src/repo-guard.mjs check-pr
+        run: npx repo-guard check-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
