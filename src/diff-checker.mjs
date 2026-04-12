@@ -12,7 +12,7 @@ export function parseDiff(diffText) {
     if (line.startsWith("diff --git")) {
       if (current) files.push(current);
       const match = line.match(/diff --git a\/.+ b\/(.+)/);
-      current = { path: match ? match[1] : "", addedLines: [], status: "modified" };
+      current = { path: match ? match[1] : "", addedLines: [], deletedLines: [], status: "modified" };
       continue;
     }
 
@@ -24,6 +24,8 @@ export function parseDiff(diffText) {
       current.status = "deleted";
     } else if (line.startsWith("+") && !line.startsWith("+++")) {
       current.addedLines.push(line.slice(1));
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      current.deletedLines.push(line.slice(1));
     }
   }
 
@@ -77,7 +79,7 @@ export function checkNetAddedLinesBudget(files, maxNetAddedLines) {
 
   let netAdded = 0;
   for (const f of files) {
-    netAdded += f.addedLines.length;
+    netAdded += f.addedLines.length - (f.deletedLines ? f.deletedLines.length : 0);
   }
 
   return {

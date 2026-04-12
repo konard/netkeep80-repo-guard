@@ -33,11 +33,13 @@ const sampleDiff = [
   "diff --git a/README.md b/README.md",
   "--- a/README.md",
   "+++ b/README.md",
+  "-Old line in readme",
   "+New line in readme",
   "diff --git a/old.bak b/old.bak",
   "deleted file mode 100644",
   "--- a/old.bak",
   "+++ /dev/null",
+  "-old content",
 ].join("\n");
 
 const files = parseDiff(sampleDiff);
@@ -46,12 +48,14 @@ expect("parseDiff: new file status", files[0].status, "added");
 expect("parseDiff: modified file status", files[1].status, "modified");
 expect("parseDiff: deleted file status", files[2].status, "deleted");
 expect("parseDiff: added lines count", files[0].addedLines.length, 2);
+expect("parseDiff: deleted lines count (modified)", files[1].deletedLines.length, 1);
+expect("parseDiff: deleted lines count (deleted file)", files[2].deletedLines.length, 1);
 
 // --- 1. Valid diff passes ---
 
 const validFiles = [
-  { path: "src/utils.mjs", addedLines: ["const x = 1;"], status: "modified" },
-  { path: "tests/test-utils.mjs", addedLines: ["assert(true);"], status: "added" },
+  { path: "src/utils.mjs", addedLines: ["const x = 1;"], deletedLines: [], status: "modified" },
+  { path: "tests/test-utils.mjs", addedLines: ["assert(true);"], deletedLines: [], status: "added" },
 ];
 
 const forbiddenPatterns = ["*.bak", "docs/phase-*"];
@@ -109,7 +113,7 @@ expect("3. canonical doc excluded from count", canonicalResult.ok, true);
 // --- 4. Max net added lines exceeded ---
 
 const manyLinesFiles = [
-  { path: "src/big.mjs", addedLines: new Array(101).fill("line"), status: "added" },
+  { path: "src/big.mjs", addedLines: new Array(101).fill("line"), deletedLines: [], status: "added" },
 ];
 
 const linesResult = checkNetAddedLinesBudget(manyLinesFiles, 100);
@@ -117,9 +121,26 @@ expect("4. max net added lines exceeded", linesResult.ok, false);
 expect("4. net added lines actual", linesResult.actual, 101);
 
 const exactLinesFiles = [
-  { path: "src/exact.mjs", addedLines: new Array(100).fill("line"), status: "added" },
+  { path: "src/exact.mjs", addedLines: new Array(100).fill("line"), deletedLines: [], status: "added" },
 ];
 expect("4. exact budget passes", checkNetAddedLinesBudget(exactLinesFiles, 100).ok, true);
+
+// net = added - deleted: 80 added, 30 deleted => net 50, within budget of 60
+const netFiles = [
+  { path: "src/refactor.mjs", addedLines: new Array(80).fill("new"), deletedLines: new Array(30).fill("old"), status: "modified" },
+];
+expect("4. net lines (added-deleted) within budget", checkNetAddedLinesBudget(netFiles, 60).ok, true);
+expect("4. net lines actual is 50", checkNetAddedLinesBudget(netFiles, 60).actual, 50);
+
+// net = added - deleted: 80 added, 30 deleted => net 50, exceeds budget of 40
+expect("4. net lines exceeds tighter budget", checkNetAddedLinesBudget(netFiles, 40).ok, false);
+
+// net can be negative when more lines deleted than added
+const shrinkFiles = [
+  { path: "src/cleanup.mjs", addedLines: new Array(5).fill("new"), deletedLines: new Array(20).fill("old"), status: "modified" },
+];
+expect("4. negative net always passes", checkNetAddedLinesBudget(shrinkFiles, 0).ok, true);
+expect("4. negative net actual", checkNetAddedLinesBudget(shrinkFiles, 0).actual, -15);
 
 // --- 5. Co-change rule violation ---
 
