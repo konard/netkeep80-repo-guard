@@ -79,9 +79,59 @@ Operational paths (bot-артефакты) исключаются из всех 
 | Diff checker | `src/diff-checker.mjs` | Парсинг diff и проверка правил |
 | Contract extractor | `src/markdown-contract.mjs` | Извлечение contract из markdown |
 | PR интеграция | `src/github-pr.mjs` | PR gate для GitHub Actions |
+| Init scaffolding | `src/init.mjs` | Генерация начальной конфигурации |
 | Шаблоны | `templates/` | Примеры policy и contract |
 
 ## Быстрый старт
+
+### Инициализация нового репозитория
+
+Команда `repo-guard init` создаёт минимальную рабочую конфигурацию для репозитория:
+
+```bash
+repo-guard init
+```
+
+По умолчанию создаются:
+- `repo-policy.json` — политика репозитория
+- `.github/workflows/repo-guard.yml` — GitHub Actions workflow
+- `.github/PULL_REQUEST_TEMPLATE.md` — шаблон PR с блоком change contract
+- `.github/ISSUE_TEMPLATE/change-contract.yml` — шаблон issue для change contract
+
+Существующие файлы не перезаписываются — если файл уже есть, он будет пропущен.
+
+#### Пресеты
+
+Пресет определяет начальные значения policy в зависимости от типа репозитория:
+
+```bash
+repo-guard init --preset library
+repo-guard init --preset application   # по умолчанию
+repo-guard init --preset tooling
+repo-guard init --preset documentation
+```
+
+| Пресет | `max_new_files` | `max_new_docs` | `max_net_added_lines` | Co-change rules |
+|---|---|---|---|---|
+| `application` | 20 | 3 | 1500 | нет |
+| `library` | 15 | 2 | 1000 | `src/**` → `tests/**` |
+| `tooling` | 15 | 2 | 2000 | `src/**` → `tests/**` |
+| `documentation` | 20 | 10 | — | нет |
+
+#### Режим enforcement
+
+```bash
+repo-guard init --mode enforce    # по умолчанию — строгие бюджеты
+repo-guard init --mode advisory   # ослабленные бюджеты (50 файлов, 10 docs, 5000 строк)
+```
+
+Режим `advisory` удобен для начала: ограничения мягкие, ничего не блокируется, но структура готова к ужесточению.
+
+#### Использование с --repo-root
+
+```bash
+repo-guard --repo-root /path/to/other/repo init --preset library --mode advisory
+```
 
 ### Установка
 

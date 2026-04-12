@@ -252,13 +252,13 @@ function runValidate(roots, args) {
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(__dirname, "repo-guard.mjs");
 
 if (isMain) {
-  const MODES = new Set(["check-diff", "check-pr"]);
+  const MODES = new Set(["check-diff", "check-pr", "init"]);
   const roots = resolveRoots(process.argv.slice(2));
   const command = roots.args[0];
 
   if (command && !MODES.has(command) && command.startsWith("-")) {
     console.error(`Unknown option: ${command}`);
-    console.error("Usage: repo-guard [--repo-root <path>] [check-diff|check-pr] [options]");
+    console.error("Usage: repo-guard [--repo-root <path>] [check-diff|check-pr|init] [options]");
     process.exit(1);
   }
 
@@ -269,6 +269,10 @@ if (isMain) {
     roots.args = roots.args.slice(1);
     const { runCheckPR } = await import("./github-pr.mjs");
     runCheckPR(roots);
+  } else if (command === "init") {
+    roots.args = roots.args.slice(1);
+    const { runInit } = await import("./init.mjs");
+    runInit(roots, roots.args);
   } else {
     runValidate(roots, roots.args);
   }

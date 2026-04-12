@@ -16,13 +16,14 @@
   ],
   "scripts": {
     "validate": "node src/repo-guard.mjs",
-    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-repo-root.mjs",
+    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-repo-root.mjs && node tests/test-init.mjs",
     "test:hardening": "node tests/test-hardening.mjs",
     "test:repo-root": "node tests/test-repo-root.mjs",
     "test:schemas": "node tests/validate-schemas.mjs",
     "test:diff": "node tests/test-diff-rules.mjs",
     "test:contract": "node tests/test-markdown-contract.mjs",
-    "test:github-pr": "node tests/test-github-pr.mjs"
+    "test:github-pr": "node tests/test-github-pr.mjs",
+    "test:init": "node tests/test-init.mjs"
   },
   "keywords": [
     "repo-policy",
