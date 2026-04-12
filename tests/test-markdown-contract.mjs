@@ -104,6 +104,8 @@ expect("multiple links", extractLinkedIssueNumbers("Fixes #1\nCloses #2").join("
 expect("no links", extractLinkedIssueNumbers("Just a normal description").join(","), "");
 expect("null input", extractLinkedIssueNumbers(null).join(","), "");
 expect("dedup", extractLinkedIssueNumbers("Fixes #5\nCloses #5").join(","), "5");
+expect("qualified ref owner/repo#N", extractLinkedIssueNumbers("Fixes netkeep80/repo-guard#11").join(","), "11");
+expect("qualified ref mixed", extractLinkedIssueNumbers("Fixes owner/repo#7\nCloses #3").join(","), "7,3");
 
 // --- resolveContract ---
 
