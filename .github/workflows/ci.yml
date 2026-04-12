@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
 
       - name: Validate repo-policy.json
-        run: node src/repo-guard.mjs
+        run: npx repo-guard
 
       - name: Run schema tests
         run: npm run test:schemas
@@ -44,6 +44,29 @@ jobs:
 
       - name: Run PR policy check
         if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-        run: node src/repo-guard.mjs check-pr
+        run: npx repo-guard check-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      - name: Smoke-test packaged artifact
+        run: |
+          # Pack the package and capture the tarball filename
+          npm pack 2>/dev/null
+          TARBALL=$(ls repo-guard-*.tgz)
+          REPODIR="$PWD"
+          TMPDIR=$(mktemp -d)
+          # Install from tarball into a fresh temp directory (simulates downstream consumer)
+          npm install --prefix "$TMPDIR" "$REPODIR/$TARBALL"
+          # Run repo-guard from the installed package against this repo's policy
+          "$TMPDIR/node_modules/.bin/repo-guard" --repo-root "$REPODIR"

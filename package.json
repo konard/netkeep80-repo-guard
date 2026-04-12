@@ -1,12 +1,19 @@
 {
   "name": "repo-guard",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "Executable repository policy enforcement via JSON Schema validation and diff-based rule checking",
   "type": "module",
   "main": "src/repo-guard.mjs",
   "bin": {
     "repo-guard": "src/repo-guard.mjs"
   },
+  "files": [
+    "src/",
+    "schemas/",
+    "templates/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "validate": "node src/repo-guard.mjs",
     "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-repo-root.mjs",
