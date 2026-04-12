@@ -136,9 +136,20 @@ node src/repo-guard.mjs check-pr
 
 ### Использование в другом репозитории
 
+`--repo-root` — глобальный флаг, который можно ставить как до, так и после команды:
+
 ```bash
+# validate
 node src/repo-guard.mjs --repo-root /path/to/other/repo
+node src/repo-guard.mjs --repo-root /path/to/other/repo contract.json
+
+# check-diff (--repo-root до или после команды)
+node src/repo-guard.mjs --repo-root /path/to/other/repo check-diff --base main --head feature
 node src/repo-guard.mjs check-diff --repo-root /path/to/other/repo --base main --head feature
+
+# check-pr (--repo-root до или после команды)
+node src/repo-guard.mjs --repo-root /path/to/other/repo check-pr
+node src/repo-guard.mjs check-pr --repo-root /path/to/other/repo
 ```
 
 Флаг `--repo-root` указывает, где искать `repo-policy.json` и выполнять git-операции. Схемы загружаются из пакета `repo-guard`.
