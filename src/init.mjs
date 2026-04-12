@@ -78,7 +78,7 @@ jobs:
           fetch-depth: 0
 
       - name: Enforce repository policy
-        uses: netkeep80/repo-guard@vX.Y.Z  # replace with a release tag
+        uses: netkeep80/repo-guard@main
         with:
           mode: check-pr
         env:
@@ -220,8 +220,7 @@ export function runInit(roots, args) {
   } else if (created.length > 0) {
     console.log("\nNext steps:");
     console.log("  1. Review the generated files and adjust to your needs.");
-    console.log("  2. Replace @vX.Y.Z in the workflow with the latest repo-guard release tag.");
-    console.log("  3. Commit and push the changes.");
+    console.log("  2. Commit and push the changes.");
   }
 }
 

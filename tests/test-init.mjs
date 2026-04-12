@@ -131,7 +131,7 @@ console.log("\n--- workflow content ---");
   const dir = makeTmpDir();
   runInit(`--repo-root ${dir} init`);
   const workflow = readFileSync(join(dir, ".github/workflows/repo-guard.yml"), "utf-8");
-  expectIncludes("workflow uses repo-guard action", workflow, "netkeep80/repo-guard@vX.Y.Z");
+  expectIncludes("workflow uses repo-guard action", workflow, "netkeep80/repo-guard@main");
   expectIncludes("workflow uses check-pr", workflow, "mode: check-pr");
   expectIncludes("workflow has fetch-depth 0", workflow, "fetch-depth: 0");
   expectIncludes("workflow has GH_TOKEN", workflow, "GH_TOKEN");
