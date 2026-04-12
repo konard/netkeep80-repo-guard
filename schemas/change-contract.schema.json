@@ -33,6 +33,10 @@
         "max_new_docs": {
           "type": "integer",
           "minimum": 0
+        },
+        "max_net_added_lines": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

@@ -1,5 +1,5 @@
 {
-  "policy_format_version": "0.1.0",
+  "policy_format_version": "0.2.0",
   "repository_kind": "tooling",
   "paths": {
     "forbidden": [
@@ -13,11 +13,15 @@
     "governance_paths": [
       "repo-policy.json",
       "schemas/"
+    ],
+    "public_api": [
+      "src/repo-guard.mjs"
     ]
   },
   "diff_rules": {
     "max_new_docs": 2,
-    "max_new_files": 10
+    "max_new_files": 15,
+    "max_net_added_lines": 2000
   },
   "content_rules": [
     {
@@ -27,5 +31,10 @@
       "message": "TODO comments must reference an issue: TODO(#123)"
     }
   ],
-  "cochange_rules": []
+  "cochange_rules": [
+    {
+      "if_changed": ["src/**"],
+      "must_change_any": ["tests/**"]
+    }
+  ]
 }

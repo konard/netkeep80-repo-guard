@@ -1,0 +1,13 @@
+{
+  "change_type": "feature",
+  "scope": ["src/**"],
+  "budgets": {
+    "max_new_files": 3,
+    "max_new_docs": 1,
+    "max_net_added_lines": 500
+  },
+  "must_touch": ["src/repo-guard.mjs"],
+  "must_not_touch": ["LICENSE"],
+  "expected_effects": ["Diff-based enforcement checks work in CI"],
+  "overrides": []
+}

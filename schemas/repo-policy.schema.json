@@ -37,6 +37,10 @@
         "governance_paths": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "public_api": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     },
@@ -52,6 +56,10 @@
         "max_new_files": {
           "type": "integer",
           "minimum": 0
+        },
+        "max_net_added_lines": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -59,7 +67,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "pattern", "severity", "message"],
+        "required": ["id"],
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string" },
@@ -68,7 +76,17 @@
             "type": "string",
             "enum": ["error", "warn", "info"]
           },
-          "message": { "type": "string" }
+          "message": { "type": "string" },
+          "glob": { "type": "string" },
+          "mode": {
+            "type": "string",
+            "enum": ["added_lines"]
+          },
+          "forbid_regex": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          }
         }
       }
     },

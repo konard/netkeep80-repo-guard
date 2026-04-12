@@ -3,7 +3,8 @@
   "scope": ["src/**", "schemas/**", "tests/**"],
   "budgets": {
     "max_new_files": 15,
-    "max_new_docs": 2
+    "max_new_docs": 2,
+    "max_net_added_lines": 1000
   },
   "must_touch": ["package.json", "src/repo-guard.mjs"],
   "must_not_touch": ["LICENSE"],
