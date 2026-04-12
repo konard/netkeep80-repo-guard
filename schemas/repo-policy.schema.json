@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/netkeep80/repo-guard/schemas/repo-policy.schema.json",
+  "title": "Repository Policy",
+  "type": "object",
+  "required": [
+    "policy_format_version",
+    "repository_kind",
+    "paths",
+    "diff_rules",
+    "content_rules",
+    "cochange_rules"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "policy_format_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "repository_kind": {
+      "type": "string",
+      "enum": ["library", "application", "tooling", "documentation"]
+    },
+    "paths": {
+      "type": "object",
+      "required": ["forbidden", "canonical_docs", "governance_paths"],
+      "additionalProperties": false,
+      "properties": {
+        "forbidden": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "canonical_docs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "governance_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "diff_rules": {
+      "type": "object",
+      "required": ["max_new_docs", "max_new_files"],
+      "additionalProperties": false,
+      "properties": {
+        "max_new_docs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_new_files": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "content_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "pattern", "severity", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "pattern": { "type": "string" },
+          "severity": {
+            "type": "string",
+            "enum": ["error", "warn", "info"]
+          },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "cochange_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["if_changed", "must_change_any"],
+        "additionalProperties": false,
+        "properties": {
+          "if_changed": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          },
+          "must_change_any": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/netkeep80/repo-guard/schemas/change-contract.schema.json",
+  "title": "Change Contract",
+  "type": "object",
+  "required": [
+    "change_type",
+    "scope",
+    "budgets",
+    "must_touch",
+    "must_not_touch",
+    "expected_effects"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "change_type": {
+      "type": "string",
+      "enum": ["feature", "bugfix", "refactor", "docs", "chore"]
+    },
+    "scope": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_new_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_new_docs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "must_touch": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "must_not_touch": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expected_effects": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule_id", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

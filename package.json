@@ -1,0 +1,22 @@
+{
+  "name": "repo-guard",
+  "version": "0.1.0",
+  "description": "Executable repository policy enforcement via JSON Schema validation",
+  "type": "module",
+  "main": "src/repo-guard.mjs",
+  "bin": {
+    "repo-guard": "src/repo-guard.mjs"
+  },
+  "scripts": {
+    "validate": "node src/repo-guard.mjs",
+    "test": "node tests/validate-schemas.mjs"
+  },
+  "keywords": ["repo-policy", "json-schema", "validation", "ci"],
+  "license": "Unlicense",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1"
+  }
+}
