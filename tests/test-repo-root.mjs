@@ -454,5 +454,91 @@ function expect(label, actual, expected) {
   rmSync(tmp, { recursive: true });
 }
 
+// --- --repo-root without value produces clear error ---
+
+{
+  try {
+    execSync(
+      `node src/repo-guard.mjs --repo-root 2>&1`,
+      { encoding: "utf-8", cwd: projectRoot }
+    );
+    expect("--repo-root without value exits with error", false, true);
+  } catch (e) {
+    const output = (e.stdout || "") + (e.stderr || "");
+    expect("--repo-root without value shows error", output.includes("--repo-root requires a path argument"), true);
+    expect("--repo-root without value shows usage hint", output.includes("Usage:"), true);
+  }
+}
+
+// --- --repo-root followed by flag (missing value) produces clear error ---
+
+{
+  try {
+    execSync(
+      `node src/repo-guard.mjs check-diff --repo-root --base HEAD~1 --head HEAD 2>&1`,
+      { encoding: "utf-8", cwd: projectRoot }
+    );
+    expect("--repo-root --base exits with error", false, true);
+  } catch (e) {
+    const output = (e.stdout || "") + (e.stderr || "");
+    expect("--repo-root followed by flag shows error", output.includes("--repo-root requires a path argument"), true);
+  }
+}
+
+// --- unknown option in check-diff mode produces clear error ---
+
+{
+  try {
+    execSync(
+      `node src/repo-guard.mjs check-diff --hed HEAD 2>&1`,
+      { encoding: "utf-8", cwd: projectRoot }
+    );
+    expect("unknown check-diff option exits with error", false, true);
+  } catch (e) {
+    const output = (e.stdout || "") + (e.stderr || "");
+    expect("unknown check-diff option shows error message", output.includes("Unknown option for check-diff: --hed"), true);
+    expect("unknown check-diff option shows usage hint", output.includes("Usage:"), true);
+  }
+}
+
+// --- known check-diff options still work (no false positive) ---
+
+{
+  const tmp = mkdtempSync(join(tmpdir(), "rg-known-opts-"));
+  execSync("git init", { cwd: tmp });
+  execSync("git config user.email test@test.com && git config user.name Test", { cwd: tmp });
+
+  const policy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: {
+      forbidden: [],
+      canonical_docs: ["README.md"],
+      governance_paths: ["repo-policy.json"],
+    },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(policy));
+  writeFileSync(join(tmp, "a.txt"), "a");
+  execSync("git add -A && git commit -m init", { cwd: tmp });
+
+  writeFileSync(join(tmp, "b.txt"), "b");
+  execSync("git add -A && git commit -m second", { cwd: tmp });
+
+  try {
+    const output = execSync(
+      `node src/repo-guard.mjs check-diff --repo-root ${tmp} --base HEAD~1 --head HEAD`,
+      { encoding: "utf-8", cwd: projectRoot }
+    );
+    expect("known check-diff options still accepted", output.includes("1 file(s) changed"), true);
+  } catch (e) {
+    expect("known check-diff options still accepted", false, true);
+  }
+
+  rmSync(tmp, { recursive: true });
+}
+
 console.log(`\n${failures === 0 ? "All tests passed" : `${failures} test(s) failed`}`);
 process.exit(failures === 0 ? 0 : 1);
