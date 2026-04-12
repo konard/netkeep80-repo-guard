@@ -3,7 +3,7 @@
 Include a change contract in the PR description so `repo-guard` can
 validate the proposed changes against the repository policy:
 
-```json
+```repo-guard-json
 {
   "change_type": "bugfix",
   "scope": ["src/pagination.mjs"],

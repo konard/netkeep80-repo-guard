@@ -3,7 +3,7 @@
 When opening an issue that proposes code changes, attach a change contract
 as a JSON code block so `repo-guard` can validate it:
 
-```json
+```repo-guard-json
 {
   "change_type": "feature",
   "scope": ["src/auth.mjs", "src/middleware/**"],

@@ -28,3 +28,15 @@ jobs:
 
       - name: Run diff-rule tests
         run: npm run test:diff
+
+      - name: Run contract extraction tests
+        run: npm run test:contract
+
+      - name: Run GitHub PR integration tests
+        run: npm run test:github-pr
+
+      - name: Run PR policy check
+        if: github.event_name == 'pull_request'
+        run: node src/repo-guard.mjs check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

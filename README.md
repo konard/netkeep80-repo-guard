@@ -22,10 +22,17 @@ Executable repository policy enforcement via JSON Schema validation and diff-bas
 - `must_touch` / `must_not_touch` validation (from change contracts)
 - Operational paths (bot-artifact files excluded from checks)
 
+### GitHub PR policy gate (`check-pr`)
+
+- Extracts change-contract from PR body (fenced ` ```repo-guard-json ` block)
+- Falls back to linked issue body (`Fixes #N` / `Closes #N` / `Resolves #N`)
+- Validates extracted contract against schema
+- Runs full diff-based enforcement between PR base and head
+- Distinct error codes for missing contract, malformed JSON, schema violations, and policy violations
+
 ## What it does not do
 
 - Post comments on GitHub PRs/issues.
-- Parse PR/issue body for change contracts.
 - Act as a reusable GitHub Action.
 
 These are planned for the next iteration.
@@ -38,6 +45,7 @@ node src/repo-guard.mjs                                  # validate repo-policy.
 node src/repo-guard.mjs path/to/contract.json            # also validate a change contract
 node src/repo-guard.mjs check-diff                       # run diff checks against staged/HEAD
 node src/repo-guard.mjs check-diff --base main --head feature  # compare branches
+node src/repo-guard.mjs check-pr                              # PR policy gate (GitHub Actions)
 npm test                                                  # run all tests
 ```
 
@@ -50,6 +58,8 @@ npm test                                                  # run all tests
 | Change contract schema | `schemas/change-contract.schema.json` | Validates change contracts |
 | CLI runner | `src/repo-guard.mjs` | Validates and enforces policy |
 | Diff checker | `src/diff-checker.mjs` | Diff analysis and rule checks |
+| Contract extractor | `src/markdown-contract.mjs` | Extracts change-contract from markdown |
+| GitHub PR integration | `src/github-pr.mjs` | PR policy gate for GitHub Actions |
 | Templates | `templates/` | Starter policy and contract examples |
 
 ## License
