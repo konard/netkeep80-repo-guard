@@ -366,7 +366,7 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 Pin to a release tag to get reproducible runs. The Action always executes the CLI bundled with that tag, so pinning the Action ref is sufficient. Find available release tags on the [Releases page](https://github.com/netkeep80/repo-guard/releases).
 
 ```yaml
-- uses: netkeep80/repo-guard@vX.Y.Z   # replace with a release tag, e.g. v1.0.0
+- uses: netkeep80/repo-guard@vX.Y.Z   # replace with a release tag, e.g. v1.2.3
   with:
     mode: check-pr
   env:
