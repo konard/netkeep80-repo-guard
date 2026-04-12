@@ -286,6 +286,104 @@ Summary: 8 passed, 0 failed
     must_touch: tests/**
 ```
 
+## GitHub Action (reusable)
+
+`repo-guard` is packaged as a reusable GitHub Action so any repository can adopt it without installing Node.js manually or hand-assembling a custom workflow.
+
+### Quick start
+
+1. Add `repo-policy.json` to your repository root (see [minimum example](#1-policy) or copy `templates/repo-policy.min.json`).
+2. Create `.github/workflows/repo-guard.yml` (replace `vX.Y.Z` with the [latest release tag](https://github.com/netkeep80/repo-guard/releases)):
+
+```yaml
+name: repo-guard policy check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+jobs:
+  policy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for base...head diff
+
+      - name: Enforce repository policy
+        uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
+        with:
+          mode: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+3. Add a change contract to each PR description or its linked issue (see [templates/pr-contract-example.md](templates/pr-contract-example.md)).
+
+A copy-pasteable version of this workflow is also available at [`templates/example-workflow.yml`](templates/example-workflow.yml).
+
+### Inputs
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `mode` | no | `check-pr` | `check-pr` — validate a PR in GitHub Actions context. `check-diff` — validate a local diff between two refs. |
+| `repo-root` | no | `$GITHUB_WORKSPACE` | Path to the directory containing `repo-policy.json`. |
+| `base` | no | _(empty)_ | Base git ref for diff (`check-diff` only). |
+| `head` | no | _(empty)_ | Head git ref for diff (`check-diff` only). |
+| `contract` | no | _(empty)_ | Path to a contract JSON file, relative to `repo-root` (`check-diff` only). |
+| `node-version` | no | `20` | Node.js version used to run repo-guard. |
+
+### Outputs
+
+| Output | Description |
+|---|---|
+| `result` | `passed`, `failed`, or `error` |
+| `summary` | Human-readable one-line summary (mirrors the `Summary:` line from CLI output). |
+
+### Enforcement modes
+
+**Advisory** — record the result but do not block the PR:
+
+```yaml
+- name: repo-guard (advisory)
+  id: guard
+  uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
+  continue-on-error: true
+  with:
+    mode: check-pr
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Show result
+  run: echo "repo-guard result: ${{ steps.guard.outputs.result }}"
+```
+
+**Blocking** — the step fails the job if any check fails (default behaviour; no extra config needed).
+
+### Pinning the version
+
+Pin to a release tag to get reproducible runs. The Action always executes the CLI bundled with that tag, so pinning the Action ref is sufficient. Find available release tags on the [Releases page](https://github.com/netkeep80/repo-guard/releases).
+
+```yaml
+- uses: netkeep80/repo-guard@vX.Y.Z   # replace with a release tag, e.g. v1.2.3
+  with:
+    mode: check-pr
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### Using check-diff in CI
+
+```yaml
+- uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
+  with:
+    mode: check-diff
+    base: main
+    head: ${{ github.sha }}
+    contract: path/to/contract.json
+```
+
 ## Использование в GitHub PR workflow
 
 Типичный рабочий процесс:
@@ -316,7 +414,7 @@ Summary: 8 passed, 0 failed
 - `governance_paths` — информационное поле, не проверяется в runtime. Документирует, какие файлы управляют governance.
 - `public_api` — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
 - `overrides` (в change contract) — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
-- `repo-guard` пока не публикует комментарии к PR и не оформлен как переиспользуемый GitHub Action. Это запланировано.
+- `repo-guard` пока не публикует комментарии к PR.
 - Паттерны `forbid_regex` компилируются и проверяются до начала enforcement — ошибки в regex выявляются на этапе загрузки policy.
 
 ## Лицензия
