@@ -1,0 +1,145 @@
+name: "repo-guard"
+description: "Enforce repository policy and change contracts on pull requests"
+author: "netkeep80"
+
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  mode:
+    description: >
+      Enforcement mode. Use `check-pr` to validate a pull request against policy
+      and change contract (requires GitHub Actions PR event context). Use `check-diff`
+      to validate a local diff between two refs.
+    required: false
+    default: "check-pr"
+
+  repo-root:
+    description: >
+      Path to the repository root that contains `repo-policy.json`.
+      Defaults to the root of the checked-out repository (`$GITHUB_WORKSPACE`).
+    required: false
+    default: ""
+
+  base:
+    description: >
+      Base git ref for diff comparison (used with `mode: check-diff`).
+      Example: `main` or a commit SHA.
+    required: false
+    default: ""
+
+  head:
+    description: >
+      Head git ref for diff comparison (used with `mode: check-diff`).
+      Example: `feature-branch` or a commit SHA.
+    required: false
+    default: ""
+
+  contract:
+    description: >
+      Path to a change contract JSON file (used with `mode: check-diff`).
+      Path is relative to `repo-root`.
+    required: false
+    default: ""
+
+  node-version:
+    description: "Node.js version to use when running repo-guard."
+    required: false
+    default: "20"
+
+  repo-guard-version:
+    description: >
+      Version of the `repo-guard` npm package to use.
+      Defaults to `latest`. Pin to a specific version for reproducible runs.
+    required: false
+    default: "latest"
+
+outputs:
+  result:
+    description: >
+      Enforcement result: `passed` if all checks passed, `failed` if any check
+      failed, or `error` if repo-guard could not run (e.g. missing policy file).
+    value: ${{ steps.run-repo-guard.outputs.result }}
+
+  summary:
+    description: "Human-readable one-line summary of the enforcement run."
+    value: ${{ steps.run-repo-guard.outputs.summary }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install repo-guard
+      shell: bash
+      run: npm install -g repo-guard@${{ inputs.repo-guard-version }}
+
+    - name: Run repo-guard
+      id: run-repo-guard
+      shell: bash
+      env:
+        GH_TOKEN: ${{ env.GH_TOKEN }}
+      run: |
+        set +e
+
+        # Build the command
+        CMD="repo-guard"
+
+        # Append --repo-root if provided; fall back to GITHUB_WORKSPACE
+        REPO_ROOT="${{ inputs.repo-root }}"
+        if [ -z "$REPO_ROOT" ]; then
+          REPO_ROOT="${GITHUB_WORKSPACE:-$PWD}"
+        fi
+        CMD="$CMD --repo-root $REPO_ROOT"
+
+        # Append mode / sub-command
+        MODE="${{ inputs.mode }}"
+        CMD="$CMD $MODE"
+
+        # Append check-diff specific flags
+        if [ "$MODE" = "check-diff" ]; then
+          if [ -n "${{ inputs.base }}" ]; then
+            CMD="$CMD --base ${{ inputs.base }}"
+          fi
+          if [ -n "${{ inputs.head }}" ]; then
+            CMD="$CMD --head ${{ inputs.head }}"
+          fi
+          if [ -n "${{ inputs.contract }}" ]; then
+            CMD="$CMD --contract ${{ inputs.contract }}"
+          fi
+        fi
+
+        echo "Running: $CMD"
+        OUTPUT=$($CMD 2>&1)
+        EXIT_CODE=$?
+
+        echo "$OUTPUT"
+
+        # Derive result and summary outputs
+        if [ $EXIT_CODE -eq 0 ]; then
+          RESULT="passed"
+          SUMMARY=$(echo "$OUTPUT" | grep -E "^Summary:" | tail -1)
+          if [ -z "$SUMMARY" ]; then
+            SUMMARY="repo-guard: all checks passed"
+          fi
+        else
+          # Distinguish configuration/runtime errors from enforcement failures
+          if echo "$OUTPUT" | grep -qE "^(ERROR|FAIL: repo-policy)"; then
+            RESULT="error"
+          else
+            RESULT="failed"
+          fi
+          SUMMARY=$(echo "$OUTPUT" | grep -E "^Summary:" | tail -1)
+          if [ -z "$SUMMARY" ]; then
+            SUMMARY="repo-guard: one or more checks failed (exit $EXIT_CODE)"
+          fi
+        fi
+
+        echo "result=$RESULT" >> "$GITHUB_OUTPUT"
+        echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+
+        exit $EXIT_CODE

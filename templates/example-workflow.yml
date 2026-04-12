@@ -1,0 +1,33 @@
+# Example: repo-guard reusable Action
+#
+# Copy this file to .github/workflows/repo-guard.yml in your repository.
+# Requires a repo-policy.json at the repository root (see templates/repo-policy.min.json).
+#
+# Minimal setup:
+#   1. Add repo-policy.json to your repo root.
+#   2. Copy this workflow file to .github/workflows/repo-guard.yml.
+#   3. Add a change contract to PR descriptions or linked issues.
+
+name: repo-guard policy check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+jobs:
+  policy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history is required for base...head diff
+          fetch-depth: 0
+
+      - name: Enforce repository policy
+        uses: netkeep80/repo-guard@main
+        with:
+          mode: check-pr
+        env:
+          # Required for fetching linked issue contracts
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
