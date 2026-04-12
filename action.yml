@@ -48,13 +48,6 @@ inputs:
     required: false
     default: "20"
 
-  repo-guard-version:
-    description: >
-      Version of the `repo-guard` npm package to use.
-      Defaults to `latest`. Pin to a specific version for reproducible runs.
-    required: false
-    default: "latest"
-
 outputs:
   result:
     description: >
@@ -74,42 +67,12 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
-    - name: Resolve repo-guard binary
-      id: resolve-bin
+    - name: Install repo-guard dependencies
       shell: bash
       run: |
-        # Priority order for resolving the repo-guard CLI:
-        #
-        # 1. Source entrypoint inside this action's own checkout (self-hosted use,
-        #    e.g. `uses: ./` or `uses: netkeep80/repo-guard@<ref>` before the
-        #    package is published to npm).  The action file lives at
-        #    $GITHUB_ACTION_PATH/action.yml; if src/repo-guard.mjs is next to it
-        #    we know we're running from source.
-        #
-        # 2. node_modules/.bin/repo-guard in the workspace (pre-installed by an
-        #    earlier `npm ci` step in the same job).
-        #
-        # 3. A globally-installed binary from npm (downstream consumers who install
-        #    the Action by tag after the package is published).
-
-        ACTION_SRC="${GITHUB_ACTION_PATH}/src/repo-guard.mjs"
-        WORKSPACE_BIN="${GITHUB_WORKSPACE}/node_modules/.bin/repo-guard"
-
-        if [ -f "$ACTION_SRC" ]; then
-          echo "bin=node ${ACTION_SRC}" >> "$GITHUB_OUTPUT"
-          echo "Resolved: source entrypoint at ${ACTION_SRC}"
-        elif [ -f "$WORKSPACE_BIN" ]; then
-          echo "bin=${WORKSPACE_BIN}" >> "$GITHUB_OUTPUT"
-          echo "Resolved: workspace node_modules at ${WORKSPACE_BIN}"
-        else
-          echo "bin=" >> "$GITHUB_OUTPUT"
-          echo "No local binary found; will install from npm."
-        fi
-
-    - name: Install repo-guard from npm
-      if: steps.resolve-bin.outputs.bin == ''
-      shell: bash
-      run: npm install -g repo-guard@${{ inputs.repo-guard-version }}
+        # Install runtime dependencies for the checked-out Action source.
+        cd "${GITHUB_ACTION_PATH}"
+        npm install --production --silent
 
     - name: Run repo-guard
       id: run-repo-guard
@@ -119,11 +82,8 @@ runs:
       run: |
         set +e
 
-        # Determine the binary to use (set by resolve-bin step)
-        BIN="${{ steps.resolve-bin.outputs.bin }}"
-        if [ -z "$BIN" ]; then
-          BIN="repo-guard"
-        fi
+        # Always run the CLI from the checked-out Action source.
+        BIN="node ${GITHUB_ACTION_PATH}/src/repo-guard.mjs"
 
         # Build the command
         CMD="$BIN"

@@ -312,7 +312,7 @@ jobs:
           fetch-depth: 0   # required for base...head diff
 
       - name: Enforce repository policy
-        uses: netkeep80/repo-guard@main
+        uses: netkeep80/repo-guard@v1.0.0
         with:
           mode: check-pr
         env:
@@ -333,7 +333,6 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 | `head` | no | _(empty)_ | Head git ref for diff (`check-diff` only). |
 | `contract` | no | _(empty)_ | Path to a contract JSON file, relative to `repo-root` (`check-diff` only). |
 | `node-version` | no | `20` | Node.js version used to run repo-guard. |
-| `repo-guard-version` | no | `latest` | npm version of repo-guard to install. Pin for reproducible runs. |
 
 ### Outputs
 
@@ -349,7 +348,7 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 ```yaml
 - name: repo-guard (advisory)
   id: guard
-  uses: netkeep80/repo-guard@main
+  uses: netkeep80/repo-guard@v1.0.0
   continue-on-error: true
   with:
     mode: check-pr
@@ -364,11 +363,12 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 
 ### Pinning the version
 
+Pin to a release tag to get reproducible runs. The Action always executes the CLI bundled with that tag, so pinning the Action ref is sufficient.
+
 ```yaml
 - uses: netkeep80/repo-guard@v1.0.0   # pin to a release tag
   with:
     mode: check-pr
-    repo-guard-version: "1.0.0"       # pin the npm package as well
   env:
     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -376,7 +376,7 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 ### Using check-diff in CI
 
 ```yaml
-- uses: netkeep80/repo-guard@main
+- uses: netkeep80/repo-guard@v1.0.0
   with:
     mode: check-diff
     base: main
