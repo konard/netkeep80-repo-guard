@@ -13,7 +13,6 @@ as a JSON code block so `repo-guard` can validate it:
   },
   "must_touch": ["src/auth.mjs"],
   "must_not_touch": ["migrations/"],
-  "expected_effects": ["New /login and /logout endpoints"],
-  "overrides": []
+  "expected_effects": ["New /login and /logout endpoints"]
 }
 ```

@@ -30,6 +30,21 @@ Executable repository policy enforcement via JSON Schema validation and diff-bas
 - Runs full diff-based enforcement between PR base and head
 - Distinct error codes for missing contract, malformed JSON, schema violations, and policy violations
 
+**Runtime prerequisites** (checked at startup with clear diagnostics):
+- `GITHUB_EVENT_PATH` environment variable (set by GitHub Actions)
+- `git` CLI with sufficient fetch depth for base...head diff
+- `gh` CLI with auth token (for linked issue fallback)
+- Valid `pull_request` event payload with base/head SHAs
+
+### Semantic notes
+
+- **`must_touch`** uses **any-of** semantics: at least one pattern must match a changed file.
+- **`must_not_touch`** uses **all-blocking** semantics: no pattern may match any changed file.
+- **`governance_paths`** is informational only — documents which files control governance, not enforced at runtime.
+- **`public_api`** is reserved for future use — accepted by schema but not enforced; non-empty values produce a diagnostic warning.
+- **`overrides`** (in change contracts) is reserved for future use — accepted by schema but not enforced; non-empty values produce a diagnostic warning.
+- **`forbid_regex`** patterns are compiled and validated eagerly at policy load time, before any enforcement runs.
+
 ## What it does not do
 
 - Post comments on GitHub PRs/issues.

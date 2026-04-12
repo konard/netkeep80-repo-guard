@@ -13,7 +13,6 @@ validate the proposed changes against the repository policy:
   },
   "must_touch": ["src/pagination.mjs"],
   "must_not_touch": ["schemas/", "repo-policy.json"],
-  "expected_effects": ["Pagination returns correct page count"],
-  "overrides": []
+  "expected_effects": ["Pagination returns correct page count"]
 }
 ```

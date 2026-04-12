@@ -4,6 +4,11 @@ import { resolve } from "node:path";
 import Ajv from "ajv";
 import { extractContract, extractLinkedIssueNumbers, resolveContract } from "./markdown-contract.mjs";
 import {
+  compileForbidRegex,
+  warnReservedContractFields,
+  warnReservedPolicyFields,
+} from "./policy-compiler.mjs";
+import {
   parseDiff,
   filterOperationalPaths,
   checkForbiddenPaths,
@@ -73,7 +78,34 @@ export function fetchIssueBody(repoFullName, issueNumber) {
   }
 }
 
+export function checkPrerequisites() {
+  const missing = [];
+  if (!process.env.GITHUB_EVENT_PATH) {
+    missing.push("GITHUB_EVENT_PATH env var (set automatically by GitHub Actions)");
+  }
+  try {
+    execSync("git --version", { encoding: "utf-8", stdio: "pipe" });
+  } catch {
+    missing.push("git CLI (required for diff analysis)");
+  }
+  try {
+    execSync("gh --version", { encoding: "utf-8", stdio: "pipe" });
+  } catch {
+    missing.push("gh CLI (required for linked issue fallback)");
+  }
+  return missing;
+}
+
 export function runCheckPR(roots) {
+  const prereqs = checkPrerequisites();
+  if (prereqs.length > 0) {
+    console.error("ERROR: check-pr prerequisites not met:");
+    for (const p of prereqs) console.error(`  - ${p}`);
+    console.error("\ncheck-pr expects to run inside a GitHub Actions pull_request workflow.");
+    console.error("Required: GITHUB_EVENT_PATH, git with sufficient fetch depth, gh CLI with auth token.");
+    process.exit(1);
+  }
+
   const eventInfo = loadGitHubEvent();
   if (!eventInfo.ok) {
     console.error(`ERROR: ${eventInfo.message}`);
@@ -119,8 +151,24 @@ export function runCheckPR(roots) {
   ok = validate(ajv, policySchema, policy, "repo-policy.json") && ok;
   ok = validate(ajv, contractSchema, contract, "change-contract (from markdown)") && ok;
 
+  const regexErrors = compileForbidRegex(policy.content_rules);
+  if (regexErrors.length > 0) {
+    ok = false;
+    console.error("FAIL: forbid_regex compilation");
+    for (const e of regexErrors) {
+      console.error(`  [${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`);
+    }
+  }
+
+  for (const w of warnReservedPolicyFields(policy)) {
+    console.warn(`WARN: ${w}`);
+  }
+  for (const w of warnReservedContractFields(contract)) {
+    console.warn(`WARN: ${w}`);
+  }
+
   if (!ok) {
-    console.error("\nSchema validation failed");
+    console.error("\nPolicy compilation failed");
     process.exit(1);
   }
 
@@ -153,6 +201,9 @@ export function runCheckPR(roots) {
       }
       if (check.must_touch) {
         console.error(`    must_touch: ${check.must_touch.join(", ")}`);
+      }
+      if (check.hint) {
+        console.error(`    hint: ${check.hint}`);
       }
     }
   }

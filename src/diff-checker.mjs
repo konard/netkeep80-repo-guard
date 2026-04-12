@@ -156,6 +156,7 @@ export function checkMustTouch(files, mustTouch) {
     ok: satisfied,
     must_touch: mustTouch,
     changed: changedPaths,
+    hint: satisfied ? undefined : "must_touch uses any-of semantics: at least one pattern must match a changed file",
   };
 }
 

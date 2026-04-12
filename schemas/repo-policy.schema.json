@@ -36,7 +36,8 @@
         },
         "governance_paths": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "Canonical list of paths that define repository governance. Informational only; not enforced at runtime. Used to document which files control policy."
         },
         "operational_paths": {
           "type": "array",
@@ -46,7 +47,7 @@
         "public_api": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Reserved for future use: paths considered public API surface"
+          "description": "Reserved for future use. Accepted by schema but not enforced at runtime. Non-empty values will produce a diagnostic warning."
         }
       }
     },

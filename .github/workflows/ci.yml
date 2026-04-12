@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
 jobs:
@@ -35,11 +36,14 @@ jobs:
       - name: Run GitHub PR integration tests
         run: npm run test:github-pr
 
+      - name: Run hardening tests
+        run: npm run test:hardening
+
       - name: Run repo-root separation tests
         run: npm run test:repo-root
 
       - name: Run PR policy check
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && !github.event.pull_request.draft
         run: node src/repo-guard.mjs check-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -17,6 +17,11 @@ import {
   checkMustTouch,
   checkMustNotTouch,
 } from "./diff-checker.mjs";
+import {
+  compileForbidRegex,
+  warnReservedContractFields,
+  warnReservedPolicyFields,
+} from "./policy-compiler.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
@@ -74,6 +79,19 @@ function runCheckDiff(roots, args) {
   let ok = true;
   ok = validate(ajv, policySchema, policy, "repo-policy.json") && ok;
 
+  const regexErrors = compileForbidRegex(policy.content_rules);
+  if (regexErrors.length > 0) {
+    ok = false;
+    console.error("FAIL: forbid_regex compilation");
+    for (const e of regexErrors) {
+      console.error(`  [${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`);
+    }
+  }
+
+  for (const w of warnReservedPolicyFields(policy)) {
+    console.warn(`WARN: ${w}`);
+  }
+
   let contract = null;
   let base = null;
   let head = null;
@@ -85,7 +103,15 @@ function runCheckDiff(roots, args) {
       const contractPath = resolve(roots.repoRoot, args[++i]);
       contract = loadJSON(contractPath);
       ok = validate(ajv, contractSchema, contract, contractPath) && ok;
+      for (const w of warnReservedContractFields(contract)) {
+        console.warn(`WARN: ${w}`);
+      }
     }
+  }
+
+  if (!ok) {
+    console.error("\nPolicy compilation failed; aborting enforcement.");
+    process.exit(1);
   }
 
   const diffText = getDiff(base, head, roots.repoRoot);
@@ -117,6 +143,9 @@ function runCheckDiff(roots, args) {
       }
       if (check.must_touch) {
         console.error(`    must_touch: ${check.must_touch.join(", ")}`);
+      }
+      if (check.hint) {
+        console.error(`    hint: ${check.hint}`);
       }
     }
   }
@@ -184,10 +213,26 @@ function runValidate(roots, args) {
   let ok = true;
   ok = validate(ajv, policySchema, policy, "repo-policy.json") && ok;
 
+  const regexErrors = compileForbidRegex(policy.content_rules);
+  if (regexErrors.length > 0) {
+    ok = false;
+    console.error("FAIL: forbid_regex compilation");
+    for (const e of regexErrors) {
+      console.error(`  [${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`);
+    }
+  }
+
+  for (const w of warnReservedPolicyFields(policy)) {
+    console.warn(`WARN: ${w}`);
+  }
+
   const contractArg = args[0];
   if (contractArg) {
     const contract = loadJSON(resolve(roots.repoRoot, contractArg));
     ok = validate(ajv, contractSchema, contract, contractArg) && ok;
+    for (const w of warnReservedContractFields(contract)) {
+      console.warn(`WARN: ${w}`);
+    }
   }
 
   process.exit(ok ? 0 : 1);

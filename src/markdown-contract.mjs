@@ -29,7 +29,7 @@ export function extractContract(markdown) {
   return { ok: true, contract: parsed };
 }
 
-const ISSUE_LINK_RE = /(?:Fixes|Closes|Resolves)\s+#(\d+)/gi;
+const ISSUE_LINK_RE = /(?:Fixes|Closes|Resolves)\s+(?:[\w.-]+\/[\w.-]+)?#(\d+)/gi;
 
 export function extractLinkedIssueNumbers(text) {
   if (!text || typeof text !== "string") return [];

@@ -42,11 +42,13 @@
     },
     "must_touch": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": { "type": "string" },
+      "description": "Glob patterns; at least one must match a changed file (any-of semantics)"
     },
     "must_not_touch": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": { "type": "string" },
+      "description": "Glob patterns; none may match any changed file (all-blocking semantics)"
     },
     "expected_effects": {
       "type": "array",
@@ -54,6 +56,7 @@
     },
     "overrides": {
       "type": "array",
+      "description": "Reserved for future use. Accepted by schema but not enforced at runtime. Non-empty values will produce a diagnostic warning.",
       "items": {
         "type": "object",
         "required": ["rule_id", "reason"],
