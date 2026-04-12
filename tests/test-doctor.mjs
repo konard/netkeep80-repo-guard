@@ -224,13 +224,17 @@ console.log("\n--- output distinguishes pass / warn / fail ---");
   expectIncludes("contains Summary", stdout, "Summary:");
 }
 
-// --- event context warn when not in actions ---
+// --- event context adapts to environment ---
 
-console.log("\n--- event context warns outside GitHub Actions ---");
+console.log("\n--- event context adapts to environment ---");
 {
   const { stdout } = runDoctor("doctor");
-  expectIncludes("event-context WARN", stdout, "WARN: event-context");
-  expectIncludes("mentions not in GitHub Actions", stdout, "not in GitHub Actions");
+  if (process.env.GITHUB_EVENT_PATH) {
+    expectIncludes("event-context PASS in CI", stdout, "PASS: event-context");
+  } else {
+    expectIncludes("event-context WARN outside CI", stdout, "WARN: event-context");
+    expectIncludes("mentions not in GitHub Actions", stdout, "not in GitHub Actions");
+  }
 }
 
 // --- --repo-root works with doctor ---
