@@ -179,7 +179,8 @@ npm test
 
 Пример contract в теле PR (внутри блока ` ```repo-guard-json `):
 
-```json
+````markdown
+```repo-guard-json
 {
   "change_type": "bugfix",
   "scope": ["src/pagination.mjs"],
@@ -192,6 +193,7 @@ npm test
   "expected_effects": ["Pagination returns correct page count"]
 }
 ```
+````
 
 Contract говорит: это bugfix, который должен затронуть `src/pagination.mjs`, не должен трогать схемы и policy, и не должен создавать новых файлов.
 
