@@ -30,7 +30,13 @@ export function resolveRoots(args) {
   let repoRoot = process.cwd();
   const filtered = [];
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--repo-root" && args[i + 1]) {
+    if (args[i] === "--repo-root") {
+      const next = args[i + 1];
+      if (!next || next.startsWith("-")) {
+        console.error("Error: --repo-root requires a path argument");
+        console.error("Usage: repo-guard [--repo-root <path>] [check-diff|check-pr] [options]");
+        process.exit(1);
+      }
       repoRoot = resolve(args[++i]);
     } else {
       filtered.push(args[i]);
@@ -95,6 +101,7 @@ function runCheckDiff(roots, args) {
   let contract = null;
   let base = null;
   let head = null;
+  const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract"]);
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--base" && args[i + 1]) base = args[++i];
@@ -106,6 +113,10 @@ function runCheckDiff(roots, args) {
       for (const w of warnReservedContractFields(contract)) {
         console.warn(`WARN: ${w}`);
       }
+    } else if (args[i].startsWith("-") && !KNOWN_DIFF_OPTS.has(args[i])) {
+      console.error(`Unknown option for check-diff: ${args[i]}`);
+      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>]");
+      process.exit(1);
     }
   }
 
@@ -241,17 +252,24 @@ function runValidate(roots, args) {
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(__dirname, "repo-guard.mjs");
 
 if (isMain) {
-  const command = process.argv[2];
+  const MODES = new Set(["check-diff", "check-pr"]);
+  const roots = resolveRoots(process.argv.slice(2));
+  const command = roots.args[0];
+
+  if (command && !MODES.has(command) && command.startsWith("-")) {
+    console.error(`Unknown option: ${command}`);
+    console.error("Usage: repo-guard [--repo-root <path>] [check-diff|check-pr] [options]");
+    process.exit(1);
+  }
 
   if (command === "check-diff") {
-    const roots = resolveRoots(process.argv.slice(3));
+    roots.args = roots.args.slice(1);
     runCheckDiff(roots, roots.args);
   } else if (command === "check-pr") {
-    const roots = resolveRoots(process.argv.slice(3));
+    roots.args = roots.args.slice(1);
     const { runCheckPR } = await import("./github-pr.mjs");
     runCheckPR(roots);
   } else {
-    const roots = resolveRoots(process.argv.slice(2));
     runValidate(roots, roots.args);
   }
 }
