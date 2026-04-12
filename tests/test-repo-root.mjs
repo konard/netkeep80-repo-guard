@@ -301,7 +301,7 @@ function expect(label, actual, expected) {
   try {
     const result = execSync(
       `node src/repo-guard.mjs --repo-root ${tmp} check-pr 2>&1`,
-      { encoding: "utf-8", cwd: projectRoot }
+      { encoding: "utf-8", cwd: projectRoot, env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "GITHUB_EVENT_PATH")) }
     );
     const isCheckPR = result.includes("check-pr") && !result.includes("ENOENT");
     expect("pre-command --repo-root check-pr enters check-pr mode", isCheckPR, true);
