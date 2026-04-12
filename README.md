@@ -293,7 +293,7 @@ Summary: 8 passed, 0 failed
 ### Quick start
 
 1. Add `repo-policy.json` to your repository root (see [minimum example](#1-policy) or copy `templates/repo-policy.min.json`).
-2. Create `.github/workflows/repo-guard.yml`:
+2. Create `.github/workflows/repo-guard.yml` (replace `vX.Y.Z` with the [latest release tag](https://github.com/netkeep80/repo-guard/releases)):
 
 ```yaml
 name: repo-guard policy check
@@ -312,7 +312,7 @@ jobs:
           fetch-depth: 0   # required for base...head diff
 
       - name: Enforce repository policy
-        uses: netkeep80/repo-guard@v1.0.0
+        uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
         with:
           mode: check-pr
         env:
@@ -348,7 +348,7 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 ```yaml
 - name: repo-guard (advisory)
   id: guard
-  uses: netkeep80/repo-guard@v1.0.0
+  uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
   continue-on-error: true
   with:
     mode: check-pr
@@ -363,10 +363,10 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 
 ### Pinning the version
 
-Pin to a release tag to get reproducible runs. The Action always executes the CLI bundled with that tag, so pinning the Action ref is sufficient.
+Pin to a release tag to get reproducible runs. The Action always executes the CLI bundled with that tag, so pinning the Action ref is sufficient. Find available release tags on the [Releases page](https://github.com/netkeep80/repo-guard/releases).
 
 ```yaml
-- uses: netkeep80/repo-guard@v1.0.0   # pin to a release tag
+- uses: netkeep80/repo-guard@vX.Y.Z   # replace with a release tag, e.g. v1.0.0
   with:
     mode: check-pr
   env:
@@ -376,7 +376,7 @@ Pin to a release tag to get reproducible runs. The Action always executes the CL
 ### Using check-diff in CI
 
 ```yaml
-- uses: netkeep80/repo-guard@v1.0.0
+- uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
   with:
     mode: check-diff
     base: main

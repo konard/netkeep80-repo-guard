@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
 
       - name: Enforce repository policy
-        uses: netkeep80/repo-guard@v1.0.0
+        uses: netkeep80/repo-guard@vX.Y.Z  # replace with a release tag from https://github.com/netkeep80/repo-guard/releases
         with:
           mode: check-pr
         env:
