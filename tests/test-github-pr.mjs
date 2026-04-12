@@ -124,6 +124,27 @@ Feature request.
   expect("integration fallback: from issue", result.contract.change_type, "feature");
 }
 
+// --- Integration: ambiguous linked issues (>1) should be detected ---
+
+{
+  const prBody = "No contract here\n\nFixes #10\nCloses #20\nResolves #30";
+  const issues = extractLinkedIssueNumbers(prBody);
+  expect("ambiguous links: count", issues.length, 3);
+  expect("ambiguous links: first", issues[0], 10);
+  expect("ambiguous links: second", issues[1], 20);
+  expect("ambiguous links: third", issues[2], 30);
+
+  const prResult = resolveContract(prBody, null);
+  expect("ambiguous links: no contract in PR", prResult.ok, false);
+  expect("ambiguous links: contract_not_found", prResult.error, "contract_not_found");
+}
+
+{
+  const prBody = "PR with contract and multiple links\n\nFixes #10\nCloses #20\n\n```repo-guard-json\n{\"change_type\":\"bugfix\",\"scope\":[\"a\"],\"budgets\":{},\"must_touch\":[],\"must_not_touch\":[],\"expected_effects\":[\"fix\"]}\n```";
+  const result = resolveContract(prBody, null);
+  expect("ambiguous links with contract: ok (contract in PR, no fallback needed)", result.ok, true);
+}
+
 // --- Integration: simulated PR with no contract anywhere fails ---
 
 {

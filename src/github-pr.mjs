@@ -91,7 +91,11 @@ export function runCheckPR() {
   const prResult = extractContract(prBody);
   if (!prResult.ok && prResult.error === "contract_not_found") {
     const linkedIssues = extractLinkedIssueNumbers(prBody);
-    if (linkedIssues.length > 0) {
+    if (linkedIssues.length > 1) {
+      console.error(`ERROR [issue_link_ambiguous]: PR body references ${linkedIssues.length} issues (${linkedIssues.map(n => `#${n}`).join(", ")}); expected exactly one`);
+      process.exit(1);
+    }
+    if (linkedIssues.length === 1) {
       console.log(`No contract in PR body; trying linked issue #${linkedIssues[0]}...`);
       issueBody = fetchIssueBody(repoFullName, linkedIssues[0]);
       if (!issueBody) {
