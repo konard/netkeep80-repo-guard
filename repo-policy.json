@@ -1,5 +1,5 @@
 {
-  "policy_format_version": "0.2.0",
+  "policy_format_version": "0.3.0",
   "repository_kind": "tooling",
   "paths": {
     "forbidden": [
@@ -14,8 +14,8 @@
       "repo-policy.json",
       "schemas/"
     ],
-    "public_api": [
-      "src/repo-guard.mjs"
+    "operational_paths": [
+      ".claude/**"
     ]
   },
   "diff_rules": {
@@ -26,9 +26,9 @@
   "content_rules": [
     {
       "id": "no-todo-without-issue",
-      "pattern": "TODO(?!\\(#\\d+\\))",
-      "severity": "warn",
-      "message": "TODO comments must reference an issue: TODO(#123)"
+      "glob": "**",
+      "mode": "added_lines",
+      "forbid_regex": ["TODO(?!\\(#\\d+\\))"]
     }
   ],
   "cochange_rules": [

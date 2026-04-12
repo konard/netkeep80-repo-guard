@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import Ajv from "ajv";
 import {
   parseDiff,
+  filterOperationalPaths,
   checkForbiddenPaths,
   checkCanonicalDocsBudget,
   checkNewFilesBudget,
@@ -75,9 +76,11 @@ function runCheckDiff(args) {
   }
 
   const diffText = getDiff(base, head);
-  const files = parseDiff(diffText);
+  const allFiles = parseDiff(diffText);
+  const files = filterOperationalPaths(allFiles, policy.paths.operational_paths);
 
-  console.log(`\nDiff analysis: ${files.length} file(s) changed`);
+  const skipped = allFiles.length - files.length;
+  console.log(`\nDiff analysis: ${allFiles.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
 
   let passed = 0;
   let failed = 0;

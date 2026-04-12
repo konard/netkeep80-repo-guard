@@ -1,32 +1,44 @@
 # repo-guard
 
-Executable repository policy enforcement via JSON Schema validation.
+Executable repository policy enforcement via JSON Schema validation and diff-based checks.
 
 ## What it does
 
-`repo-guard` formalizes repository rules as machine-readable JSON and validates changes against them:
+`repo-guard` formalizes repository rules as machine-readable JSON and enforces them against actual changes:
 
-- **`repo-policy.json`** — declares what is allowed in the repository: forbidden paths, file budgets, content rules.
+- **`repo-policy.json`** — declares what is allowed: forbidden paths, file budgets, content rules, co-change rules, operational paths.
 - **Change contract** — a JSON document describing a proposed change: scope, budgets, files to touch/avoid, expected effects.
-- **JSON Schemas** — validate both the policy and contracts, preventing malformed or garbage data.
-- **CLI runner** (`src/repo-guard.mjs`) — loads the policy, validates it against its schema, and optionally validates a change contract.
+- **JSON Schemas** — validate both the policy and contracts, preventing malformed data.
+- **CLI runner** (`src/repo-guard.mjs`) — validates policy/contracts and runs diff-based enforcement checks.
+
+### Diff-based enforcement (`check-diff`)
+
+- Forbidden path detection (glob patterns)
+- Canonical docs budget (max new `.md` files)
+- New files budget
+- Net added lines budget (added − deleted)
+- Co-change rules (if X changed, Y must also change)
+- Content rules (forbid regex patterns in added lines)
+- `must_touch` / `must_not_touch` validation (from change contracts)
+- Operational paths (bot-artifact files excluded from checks)
 
 ## What it does not do
 
-- Parse git diffs or PR content.
 - Post comments on GitHub PRs/issues.
-- Enforce budgets against actual file changes.
+- Parse PR/issue body for change contracts.
 - Act as a reusable GitHub Action.
 
-These are planned for future iterations.
+These are planned for the next iteration.
 
 ## Quick start
 
 ```bash
 npm install
-node src/repo-guard.mjs                          # validate repo-policy.json
-node src/repo-guard.mjs path/to/contract.json    # also validate a change contract
-npm test                                          # run schema validation tests
+node src/repo-guard.mjs                                  # validate repo-policy.json
+node src/repo-guard.mjs path/to/contract.json            # also validate a change contract
+node src/repo-guard.mjs check-diff                       # run diff checks against staged/HEAD
+node src/repo-guard.mjs check-diff --base main --head feature  # compare branches
+npm test                                                  # run all tests
 ```
 
 ## Key entities
@@ -36,14 +48,9 @@ npm test                                          # run schema validation tests
 | Repository policy | `repo-policy.json` | Declares repository rules |
 | Policy schema | `schemas/repo-policy.schema.json` | Validates policy structure |
 | Change contract schema | `schemas/change-contract.schema.json` | Validates change contracts |
-| CLI runner | `src/repo-guard.mjs` | Validates policy and contracts |
+| CLI runner | `src/repo-guard.mjs` | Validates and enforces policy |
+| Diff checker | `src/diff-checker.mjs` | Diff analysis and rule checks |
 | Templates | `templates/` | Starter policy and contract examples |
-
-## MVP roadmap
-
-1. **v0.1** (this issue) — JSON models, schemas, CLI validator, CI.
-2. **v0.2** — Diff-based budget enforcement against actual git changes.
-3. **v0.3** — GitHub PR integration (auto-comments, status checks).
 
 ## License
 

@@ -41,6 +41,14 @@ expect("invalid-policy.json fails schema", validatePolicy(invalidPolicy), false)
 const repoPolicy = loadJSON(resolve(root, "repo-policy.json"));
 expect("repo-policy.json (self) passes schema", validatePolicy(repoPolicy), true);
 
+// Content rules normalization tests
+const oldFormPolicy = loadJSON(resolve(root, "tests/fixtures/invalid-content-rule-old-form.json"));
+expect("old-form content_rules (pattern/severity/message) fails schema", validatePolicy(oldFormPolicy), false);
+
+// Operational paths validation tests
+const invalidOpPaths = loadJSON(resolve(root, "tests/fixtures/invalid-operational-paths.json"));
+expect("invalid operational_paths (string instead of array) fails schema", validatePolicy(invalidOpPaths), false);
+
 // Contract tests
 const validContract = loadJSON(resolve(root, "tests/fixtures/valid-contract.json"));
 expect("valid-contract.json passes schema", validateContract(validContract), true);

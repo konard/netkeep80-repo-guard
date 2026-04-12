@@ -1,6 +1,6 @@
 {
   "name": "repo-guard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Executable repository policy enforcement via JSON Schema validation and diff-based rule checking",
   "type": "module",
   "main": "src/repo-guard.mjs",

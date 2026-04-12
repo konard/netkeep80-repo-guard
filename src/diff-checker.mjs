@@ -4,6 +4,11 @@ export function matchesAny(filePath, patterns) {
   return patterns.some((p) => minimatch(filePath, p, { dot: true }));
 }
 
+export function filterOperationalPaths(files, operationalPaths) {
+  if (!operationalPaths || operationalPaths.length === 0) return files;
+  return files.filter((f) => !matchesAny(f.path, operationalPaths));
+}
+
 export function parseDiff(diffText) {
   const files = [];
   let current = null;

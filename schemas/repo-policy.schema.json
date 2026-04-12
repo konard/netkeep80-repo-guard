@@ -38,9 +38,15 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "operational_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns for operational bot-artifact files that are allowed as special-case paths in diffs"
+        },
         "public_api": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "Reserved for future use: paths considered public API surface"
         }
       }
     },
@@ -67,16 +73,10 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id"],
+        "required": ["id", "glob", "mode", "forbid_regex"],
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string" },
-          "pattern": { "type": "string" },
-          "severity": {
-            "type": "string",
-            "enum": ["error", "warn", "info"]
-          },
-          "message": { "type": "string" },
           "glob": { "type": "string" },
           "mode": {
             "type": "string",
