@@ -1,4 +1,9 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { extractContract, extractLinkedIssueNumbers, resolveContract } from "../src/markdown-contract.mjs";
+
+const __dirname = new URL(".", import.meta.url).pathname;
+const projectRoot = resolve(__dirname, "..");
 
 let failures = 0;
 
@@ -57,6 +62,20 @@ More text after.
   expect("valid markdown: ok", result.ok, true);
   expect("valid markdown: change_type", result.contract?.change_type, "bugfix");
   expect("valid markdown: scope length", result.contract?.scope?.length, 1);
+}
+
+{
+  const template = readFileSync(resolve(projectRoot, ".github/PULL_REQUEST_TEMPLATE.md"), "utf-8");
+  const result = extractContract(template);
+  expect("repo PR template self-hosts YAML contract: ok", result.ok, true);
+  expect("repo PR template self-hosts YAML contract: change_type", result.contract?.change_type, "feature");
+}
+
+{
+  const template = readFileSync(resolve(projectRoot, ".github/ISSUE_TEMPLATE/change-contract.yml"), "utf-8");
+  const result = extractContract(template);
+  expect("repo issue template self-hosts YAML contract: ok", result.ok, true);
+  expect("repo issue template self-hosts YAML contract: change_type", result.contract?.change_type, "feature");
 }
 
 {

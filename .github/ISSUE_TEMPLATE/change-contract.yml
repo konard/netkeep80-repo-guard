@@ -1,0 +1,33 @@
+name: Change contract
+description: Propose a code change with a repo-guard change contract.
+title: "[change] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the proposed change and include a YAML change contract block.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What does this change do and why?
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Change Contract
+      description: Paste a repo-guard YAML change contract block.
+      value: |
+        ```repo-guard-yaml
+        change_type: feature
+        scope:
+          - src/
+        budgets: {}
+        must_touch: []
+        must_not_touch: []
+        expected_effects:
+          - Describe the expected effect
+        ```
+    validations:
+      required: true

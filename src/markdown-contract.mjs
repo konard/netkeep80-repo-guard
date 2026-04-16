@@ -1,6 +1,6 @@
 import { parse as parseYaml } from "yaml";
 
-const FENCE_RE = /^```(repo-guard-json|repo-guard-yaml)\s*\n([\s\S]*?)^```\s*$/gm;
+const FENCE_RE = /^[ \t]*```(repo-guard-json|repo-guard-yaml)\s*\n([\s\S]*?)^[ \t]*```\s*$/gm;
 const FORMAT_LABELS = {
   "repo-guard-json": "JSON",
   "repo-guard-yaml": "YAML",
