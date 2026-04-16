@@ -18,6 +18,26 @@ const validMarkdown = `
 
 Some description here.
 
+\`\`\`repo-guard-yaml
+change_type: bugfix
+scope:
+  - src/app.mjs
+budgets: {}
+must_touch:
+  - src/app.mjs
+must_not_touch: []
+expected_effects:
+  - Fix crash
+\`\`\`
+
+More text after.
+`;
+
+const validJsonMarkdown = `
+## My PR
+
+Some description here.
+
 \`\`\`repo-guard-json
 {
   "change_type": "bugfix",
@@ -40,6 +60,12 @@ More text after.
 }
 
 {
+  const result = extractContract(validJsonMarkdown);
+  expect("valid JSON markdown remains supported: ok", result.ok, true);
+  expect("valid JSON markdown remains supported: change_type", result.contract?.change_type, "bugfix");
+}
+
+{
   const result = extractContract("No contract block here");
   expect("no block: ok", result.ok, false);
   expect("no block: error", result.error, "contract_not_found");
@@ -58,6 +84,17 @@ More text after.
 
 {
   const md = `
+\`\`\`repo-guard-yaml
+change_type: [unterminated
+\`\`\`
+`;
+  const result = extractContract(md);
+  expect("invalid YAML: ok", result.ok, false);
+  expect("invalid YAML: error", result.error, "contract_malformed_yaml");
+}
+
+{
+  const md = `
 \`\`\`repo-guard-json
 {"change_type": "bugfix", "scope": ["a"], "budgets": {}, "must_touch": [], "must_not_touch": [], "expected_effects": []}
 \`\`\`
@@ -69,6 +106,26 @@ More text after.
   const result = extractContract(md);
   expect("multiple blocks: ok", result.ok, false);
   expect("multiple blocks: error", result.error, "multiple_contracts");
+}
+
+{
+  const md = `
+\`\`\`repo-guard-yaml
+change_type: bugfix
+scope: ["a"]
+budgets: {}
+must_touch: []
+must_not_touch: []
+expected_effects: []
+\`\`\`
+
+\`\`\`repo-guard-json
+{"change_type": "feature", "scope": ["b"], "budgets": {}, "must_touch": [], "must_not_touch": [], "expected_effects": []}
+\`\`\`
+`;
+  const result = extractContract(md);
+  expect("multiple mixed blocks: ok", result.ok, false);
+  expect("multiple mixed blocks: error", result.error, "multiple_contracts");
 }
 
 {
@@ -113,15 +170,16 @@ const validPRBody = validMarkdown;
 const validIssueBody = `
 Issue description
 
-\`\`\`repo-guard-json
-{
-  "change_type": "feature",
-  "scope": ["src/new.mjs"],
-  "budgets": {"max_new_files": 3},
-  "must_touch": [],
-  "must_not_touch": [],
-  "expected_effects": ["New feature"]
-}
+\`\`\`repo-guard-yaml
+change_type: feature
+scope:
+  - src/new.mjs
+budgets:
+  max_new_files: 3
+must_touch: []
+must_not_touch: []
+expected_effects:
+  - New feature
 \`\`\`
 `;
 

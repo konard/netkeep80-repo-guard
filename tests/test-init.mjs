@@ -159,7 +159,7 @@ console.log("\n--- PR template content ---");
   const dir = makeTmpDir();
   runInit(`--repo-root ${dir} init`);
   const tpl = readFileSync(join(dir, ".github/PULL_REQUEST_TEMPLATE.md"), "utf-8");
-  expectIncludes("PR template has contract block", tpl, "```repo-guard-json");
+  expectIncludes("PR template has YAML contract block", tpl, "```repo-guard-yaml");
   expectIncludes("PR template has change_type", tpl, "change_type");
 }
 
@@ -170,7 +170,7 @@ console.log("\n--- issue template content ---");
   const dir = makeTmpDir();
   runInit(`--repo-root ${dir} init`);
   const tpl = readFileSync(join(dir, ".github/ISSUE_TEMPLATE/change-contract.yml"), "utf-8");
-  expectIncludes("issue template has contract block", tpl, "repo-guard-json");
+  expectIncludes("issue template has YAML contract block", tpl, "repo-guard-yaml");
   expectIncludes("issue template has change_type", tpl, "change_type");
   expectIncludes("issue template has description field", tpl, "Description");
 }
