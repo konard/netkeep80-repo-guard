@@ -95,18 +95,18 @@ function buildPRTemplate() {
 
 ## Change Contract
 
-<!-- Paste a change contract block so repo-guard can validate this PR. -->
+<!-- Paste a YAML change contract block so repo-guard can validate this PR. -->
 <!-- See https://github.com/netkeep80/repo-guard for contract format. -->
 
-\`\`\`repo-guard-json
-{
-  "change_type": "feature",
-  "scope": ["src/"],
-  "budgets": {},
-  "must_touch": [],
-  "must_not_touch": [],
-  "expected_effects": ["Describe the expected effect"]
-}
+\`\`\`repo-guard-yaml
+change_type: feature
+scope:
+  - src/
+budgets: {}
+must_touch: []
+must_not_touch: []
+expected_effects:
+  - Describe the expected effect
 \`\`\`
 `;
 }
@@ -119,7 +119,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Describe the proposed change and include a change contract block.
+        Describe the proposed change and include a YAML change contract block.
   - type: textarea
     id: description
     attributes:
@@ -131,17 +131,17 @@ body:
     id: contract
     attributes:
       label: Change Contract
-      description: Paste a repo-guard change contract block.
+      description: Paste a repo-guard YAML change contract block.
       value: |
-        \`\`\`repo-guard-json
-        {
-          "change_type": "feature",
-          "scope": ["src/"],
-          "budgets": {},
-          "must_touch": [],
-          "must_not_touch": [],
-          "expected_effects": ["Describe the expected effect"]
-        }
+        \`\`\`repo-guard-yaml
+        change_type: feature
+        scope:
+          - src/
+        budgets: {}
+        must_touch: []
+        must_not_touch: []
+        expected_effects:
+          - Describe the expected effect
         \`\`\`
     validations:
       required: true

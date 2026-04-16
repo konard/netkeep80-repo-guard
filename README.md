@@ -15,7 +15,7 @@ Policy engine для репозитория: формализует правил
 `repo-guard` — это **policy-as-code** движок для Git-репозиториев:
 
 - **Policy** (`repo-policy.json`) — декларативное описание правил: запрещённые пути, бюджеты на файлы и строки, правила совместных изменений, контентные ограничения.
-- **Change contract** — JSON-документ, описывающий намерение конкретного изменения: что именно должно измениться, чего трогать нельзя, допустимые бюджеты.
+- **Change contract** — нормализованный документ намерения изменения: что именно должно измениться, чего трогать нельзя, допустимые бюджеты. В PR/issue его удобнее писать как YAML, а внутри он валидируется той же JSON Schema.
 - **Diff-based enforcement** — проверка реального diff против policy и contract.
 - **PR gate** — интеграция в GitHub Actions: CI не даёт PR пройти, если изменения нарушают политику.
 
@@ -62,7 +62,7 @@ Operational paths (bot-артефакты) исключаются из всех 
 
 ### PR policy gate (`check-pr`)
 
-1. Извлекает change contract из тела PR (блок ` ```repo-guard-json `).
+1. Извлекает change contract из тела PR (предпочтительно блок ` ```repo-guard-yaml `; старый ` ```repo-guard-json ` тоже поддерживается).
 2. Если в PR нет contract — ищет в теле привязанного issue (`Fixes #N` / `Closes #N` / `Resolves #N`, включая формат `owner/repo#N`).
 3. Если привязано несколько issue без contract в PR — завершается с ошибкой `issue_link_ambiguous`.
 4. Валидирует contract по JSON Schema.
@@ -420,25 +420,29 @@ node src/repo-guard.mjs
 
 ### 2. Change contract
 
-Пример contract в теле PR (внутри блока ` ```repo-guard-json `):
+Пример contract в теле PR (предпочтительный YAML-блок ` ```repo-guard-yaml `):
 
 ````markdown
-```repo-guard-json
-{
-  "change_type": "bugfix",
-  "scope": ["src/pagination.mjs"],
-  "budgets": {
-    "max_new_files": 0,
-    "max_new_docs": 0
-  },
-  "must_touch": ["src/pagination.mjs"],
-  "must_not_touch": ["schemas/", "repo-policy.json"],
-  "expected_effects": ["Pagination returns correct page count"]
-}
+```repo-guard-yaml
+change_type: bugfix
+scope:
+  - src/pagination.mjs
+budgets:
+  max_new_files: 0
+  max_new_docs: 0
+must_touch:
+  - src/pagination.mjs
+must_not_touch:
+  - schemas/
+  - repo-policy.json
+expected_effects:
+  - Pagination returns correct page count
 ```
 ````
 
 Contract говорит: это bugfix, который должен затронуть `src/pagination.mjs`, не должен трогать схемы и policy, и не должен создавать новых файлов.
+
+Для существующих PR сохраняется совместимость с JSON-блоком ` ```repo-guard-json `; оба формата дают одну и ту же нормализованную модель contract перед schema validation.
 
 ### 3. Что проверяет repo-guard
 
@@ -599,7 +603,7 @@ Pin to a release tag to get reproducible runs. The Action always executes the CL
 
 1. Создаётся issue с описанием задачи (опционально с change contract).
 2. Создаётся PR с ссылкой на issue (`Fixes #N`).
-3. В теле PR или linked issue размещается change contract в блоке ` ```repo-guard-json `.
+3. В теле PR или linked issue размещается change contract в блоке ` ```repo-guard-yaml ` или совместимом ` ```repo-guard-json `.
 4. CI запускает `check-pr` — извлекает contract, валидирует его, проверяет diff.
 5. PR проходит, если все проверки пройдены. Иначе — понятное сообщение об ошибке.
 

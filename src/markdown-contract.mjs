@@ -1,4 +1,26 @@
-const FENCE_RE = /^```repo-guard-json\s*\n([\s\S]*?)^```\s*$/gm;
+import { parse as parseYaml } from "yaml";
+
+const FENCE_RE = /^[ \t]*```(repo-guard-json|repo-guard-yaml)\s*\n([\s\S]*?)^[ \t]*```\s*$/gm;
+const FORMAT_LABELS = {
+  "repo-guard-json": "JSON",
+  "repo-guard-yaml": "YAML",
+};
+
+function parseContractBlock(block) {
+  try {
+    if (block.format === "repo-guard-json") {
+      return { ok: true, contract: JSON.parse(block.content) };
+    }
+    return { ok: true, contract: parseYaml(block.content) };
+  } catch (e) {
+    const format = FORMAT_LABELS[block.format];
+    return {
+      ok: false,
+      error: `contract_malformed_${format.toLowerCase()}`,
+      message: `Invalid ${format} in ${block.format} block: ${e.message}`,
+    };
+  }
+}
 
 export function extractContract(markdown) {
   if (!markdown || typeof markdown !== "string") {
@@ -8,25 +30,18 @@ export function extractContract(markdown) {
   const blocks = [];
   let match;
   while ((match = FENCE_RE.exec(markdown)) !== null) {
-    blocks.push(match[1]);
+    blocks.push({ format: match[1], content: match[2] });
   }
 
   if (blocks.length === 0) {
-    return { ok: false, error: "contract_not_found", message: "No repo-guard-json block found in markdown" };
+    return { ok: false, error: "contract_not_found", message: "No repo-guard-json or repo-guard-yaml block found in markdown" };
   }
 
   if (blocks.length > 1) {
-    return { ok: false, error: "multiple_contracts", message: `Found ${blocks.length} repo-guard-json blocks; expected exactly one` };
+    return { ok: false, error: "multiple_contracts", message: `Found ${blocks.length} repo-guard contract blocks; expected exactly one` };
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(blocks[0]);
-  } catch (e) {
-    return { ok: false, error: "contract_malformed_json", message: `Invalid JSON in repo-guard-json block: ${e.message}` };
-  }
-
-  return { ok: true, contract: parsed };
+  return parseContractBlock(blocks[0]);
 }
 
 const ISSUE_LINK_RE = /(?:Fixes|Closes|Resolves)\s+(?:[\w.-]+\/[\w.-]+)?#(\d+)/gi;
