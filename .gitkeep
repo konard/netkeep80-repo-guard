@@ -1,1 +1,26 @@
 # .gitkeep file auto-generated at 2026-04-16T11:28:24.202Z for PR creation at branch issue-24-a57529b36240 for issue https://github.com/netkeep80/repo-guard/issues/24
+
+```repo-guard-yaml
+change_type: feature
+scope:
+  - src/markdown-contract.mjs
+  - src/init.mjs
+  - tests/test-markdown-contract.mjs
+  - tests/test-init.mjs
+  - templates/**
+  - README.md
+  - package.json
+  - package-lock.json
+  - .gitkeep
+budgets:
+  max_new_files: 0
+  max_new_docs: 0
+must_touch:
+  - src/markdown-contract.mjs
+  - tests/test-markdown-contract.mjs
+must_not_touch:
+  - schemas/**
+  - repo-policy.json
+expected_effects:
+  - PR and issue markdown can use YAML contracts without losing JSON compatibility
+```
