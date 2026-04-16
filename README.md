@@ -190,6 +190,75 @@ repo-guard --enforcement advisory check-diff --base main --head feature
 
 # Явно включить blocking mode (default)
 repo-guard --enforcement blocking check-diff --base main --head feature
+
+# Машиночитаемый результат для CI tooling
+repo-guard check-diff --format json --base main --head feature
+
+# Краткий Markdown summary для GitHub job summary
+repo-guard check-diff --format summary --base main --head feature
+```
+
+#### Structured output
+
+`check-diff` supports three output formats:
+
+| Format | Purpose |
+|---|---|
+| `text` | Default human-readable CLI logs. |
+| `json` | Stable machine-readable result for CI pipelines and higher-level tooling. Stdout contains only JSON. |
+| `summary` | Concise GitHub-flavored Markdown suitable for `$GITHUB_STEP_SUMMARY`. |
+
+The JSON result is intended as an API surface. Field names are stable and intentionally boring:
+
+```json
+{
+  "mode": "blocking",
+  "ok": false,
+  "result": "failed",
+  "passed": 4,
+  "violations": [
+    {
+      "rule": "max-new-files",
+      "actual": 2,
+      "limit": 0,
+      "files": ["src/feature.mjs", "tests/feature.test.mjs"],
+      "touched": [],
+      "must_touch": [],
+      "must_not_touch": [],
+      "details": [],
+      "errors": []
+    }
+  ],
+  "violationCount": 1,
+  "failed": 1,
+  "exitCode": 1,
+  "ruleResults": [
+    {
+      "rule": "max-new-files",
+      "ok": false,
+      "details": ["actual: 2, limit: 0", "file: src/feature.mjs", "file: tests/feature.test.mjs"]
+    }
+  ],
+  "hints": [],
+  "repositoryRoot": "/path/to/repo",
+  "diff": {
+    "changedFiles": 2,
+    "checkedFiles": 2,
+    "skippedOperationalFiles": 0
+  }
+}
+```
+
+Exit behavior is unchanged: in `blocking` mode violations exit `1`; in `advisory` mode violations are reported but the command exits `0`. Consumers should read both `ok` and `exitCode`: `ok` describes policy result, while `exitCode` describes command exit semantics for the active enforcement mode.
+
+Example GitHub Actions usage:
+
+```yaml
+- name: repo-guard JSON
+  run: repo-guard check-diff --format json --base "$BASE_SHA" --head "$HEAD_SHA" > repo-guard-result.json
+
+- name: repo-guard summary
+  run: repo-guard check-diff --format summary --base "$BASE_SHA" --head "$HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ### Проверка PR (в GitHub Actions)

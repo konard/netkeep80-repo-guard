@@ -26,6 +26,7 @@ import {
   ajvErrors,
   createCheckReporter,
   printEnforcementMode,
+  renderCheckSummary,
   resolveEnforcementMode,
 } from "./enforcement.mjs";
 
@@ -64,16 +65,18 @@ function loadJSON(path) {
   return JSON.parse(readFileSync(path, "utf-8"));
 }
 
-function validate(ajv, schema, data, label) {
+function validate(ajv, schema, data, label, options = {}) {
   const valid = ajv.validate(schema, data);
   if (!valid) {
-    console.error(`FAIL: ${label}`);
-    for (const err of ajv.errors) {
-      console.error(`  ${err.instancePath || "/"} ${err.message}`);
+    if (!options.quiet) {
+      console.error(`FAIL: ${label}`);
+      for (const err of ajv.errors) {
+        console.error(`  ${err.instancePath || "/"} ${err.message}`);
+      }
     }
     return false;
   }
-  console.log(`OK: ${label}`);
+  if (!options.quiet) console.log(`OK: ${label}`);
   return true;
 }
 
@@ -103,6 +106,34 @@ function runCheckDiff(roots, args) {
   const contractSchemaPath = resolve(roots.packageRoot, "schemas/change-contract.schema.json");
   const policyPath = resolve(roots.repoRoot, "repo-policy.json");
 
+  let base = null;
+  let head = null;
+  let contractPath = null;
+  let format = "text";
+  const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract", "--format"]);
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--base" && args[i + 1]) base = args[++i];
+    else if (args[i] === "--head" && args[i + 1]) head = args[++i];
+    else if (args[i] === "--contract" && args[i + 1]) {
+      contractPath = resolve(roots.repoRoot, args[++i]);
+    } else if (args[i] === "--format" && args[i + 1]) {
+      format = args[++i];
+    } else if (args[i].startsWith("-") && !KNOWN_DIFF_OPTS.has(args[i])) {
+      console.error(`Unknown option for check-diff: ${args[i]}`);
+      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+      process.exit(1);
+    }
+  }
+
+  if (!["text", "json", "summary"].includes(format)) {
+    console.error(`Unknown check-diff format: ${format}`);
+    console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+    process.exit(1);
+  }
+
+  const quiet = format === "json";
+
   const policySchema = loadJSON(policySchemaPath);
   const contractSchema = loadJSON(contractSchemaPath);
   const policy = loadJSON(policyPath);
@@ -110,40 +141,27 @@ function runCheckDiff(roots, args) {
   const ajv = new Ajv({ allErrors: true });
 
   let ok = true;
-  ok = validate(ajv, policySchema, policy, "repo-policy.json") && ok;
+  ok = validate(ajv, policySchema, policy, "repo-policy.json", { quiet }) && ok;
 
   const regexErrors = compileForbidRegex(policy.content_rules);
   if (regexErrors.length > 0) {
     ok = false;
-    console.error("FAIL: forbid_regex compilation");
-    for (const e of regexErrors) {
-      console.error(`  [${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`);
+    if (!quiet) {
+      console.error("FAIL: forbid_regex compilation");
+      for (const e of regexErrors) {
+        console.error(`  [${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`);
+      }
     }
   }
 
-  for (const w of warnReservedPolicyFields(policy)) {
-    console.warn(`WARN: ${w}`);
-  }
-
-  let base = null;
-  let head = null;
-  let contractPath = null;
-  const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract"]);
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--base" && args[i + 1]) base = args[++i];
-    else if (args[i] === "--head" && args[i + 1]) head = args[++i];
-    else if (args[i] === "--contract" && args[i + 1]) {
-      contractPath = resolve(roots.repoRoot, args[++i]);
-    } else if (args[i].startsWith("-") && !KNOWN_DIFF_OPTS.has(args[i])) {
-      console.error(`Unknown option for check-diff: ${args[i]}`);
-      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--enforcement <advisory|blocking>]");
-      process.exit(1);
+  if (!quiet) {
+    for (const w of warnReservedPolicyFields(policy)) {
+      console.warn(`WARN: ${w}`);
     }
   }
 
   if (!ok) {
-    console.error("\nPolicy compilation failed; aborting enforcement.");
+    if (!quiet) console.error("\nPolicy compilation failed; aborting enforcement.");
     process.exit(1);
   }
 
@@ -152,8 +170,8 @@ function runCheckDiff(roots, args) {
     console.error(`ERROR: ${enforcement.message}`);
     process.exit(1);
   }
-  printEnforcementMode(enforcement);
-  const reporter = createCheckReporter(enforcement.mode);
+  if (!quiet) printEnforcementMode(enforcement);
+  const reporter = createCheckReporter(enforcement.mode, { quiet });
 
   let contract = null;
   if (contractPath) {
@@ -163,8 +181,10 @@ function runCheckDiff(roots, args) {
       reporter.report("change-contract", contractCheck);
       if (contractCheck.ok) {
         contract = loadedContract;
-        for (const w of warnReservedContractFields(contract)) {
-          console.warn(`WARN: ${w}`);
+        if (!quiet) {
+          for (const w of warnReservedContractFields(contract)) {
+            console.warn(`WARN: ${w}`);
+          }
         }
       }
     } catch (e) {
@@ -180,7 +200,7 @@ function runCheckDiff(roots, args) {
   const files = filterOperationalPaths(allFiles, policy.paths.operational_paths);
 
   const skipped = allFiles.length - files.length;
-  console.log(`\nDiff analysis: ${allFiles.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
+  if (!quiet) console.log(`\nDiff analysis: ${allFiles.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
 
   const forbiddenViolations = checkForbiddenPaths(files, policy.paths.forbidden);
   reporter.report("forbidden-paths", {
@@ -224,7 +244,19 @@ function runCheckDiff(roots, args) {
     reporter.report("must-not-touch", checkMustNotTouch(files, contract.must_not_touch));
   }
 
-  const summary = reporter.finish();
+  const summary = reporter.finish({
+    repositoryRoot: roots.repoRoot,
+    diff: {
+      changedFiles: allFiles.length,
+      checkedFiles: files.length,
+      skippedOperationalFiles: skipped,
+    },
+  });
+  if (format === "json") {
+    console.log(JSON.stringify(summary, null, 2));
+  } else if (format === "summary") {
+    console.log(renderCheckSummary(summary));
+  }
   process.exit(summary.exitCode);
 }
 

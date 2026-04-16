@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "validate": "node src/repo-guard.mjs",
-    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-repo-root.mjs && node tests/test-init.mjs && node tests/test-doctor.mjs && node tests/test-enforcement-mode.mjs",
+    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-repo-root.mjs && node tests/test-init.mjs && node tests/test-doctor.mjs && node tests/test-enforcement-mode.mjs && node tests/test-structured-output.mjs",
     "test:hardening": "node tests/test-hardening.mjs",
     "test:repo-root": "node tests/test-repo-root.mjs",
     "test:schemas": "node tests/validate-schemas.mjs",
@@ -25,7 +25,8 @@
     "test:github-pr": "node tests/test-github-pr.mjs",
     "test:init": "node tests/test-init.mjs",
     "test:doctor": "node tests/test-doctor.mjs",
-    "test:enforcement": "node tests/test-enforcement-mode.mjs"
+    "test:enforcement": "node tests/test-enforcement-mode.mjs",
+    "test:structured-output": "node tests/test-structured-output.mjs"
   },
   "keywords": [
     "repo-policy",
