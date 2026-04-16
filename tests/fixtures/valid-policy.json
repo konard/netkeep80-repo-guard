@@ -1,6 +1,9 @@
 {
   "policy_format_version": "0.1.0",
   "repository_kind": "library",
+  "enforcement": {
+    "mode": "blocking"
+  },
   "paths": {
     "forbidden": ["*.bak"],
     "canonical_docs": ["README.md"],

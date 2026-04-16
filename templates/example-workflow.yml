@@ -28,6 +28,7 @@ jobs:
         uses: netkeep80/repo-guard@vX.Y.Z  # replace with a release tag from https://github.com/netkeep80/repo-guard/releases
         with:
           mode: check-pr
+          enforcement: blocking  # use advisory while observing violations before rollout
         env:
           # Required for fetching linked issue contracts
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -47,7 +47,7 @@ console.log("\n--- default init (application + enforce) ---");
   const dir = makeTmpDir();
   const out = runInit(`--repo-root ${dir} init`);
   expectIncludes("default output mentions preset", out, "preset: application");
-  expectIncludes("default output mentions mode", out, "mode: enforce");
+  expectIncludes("default output mentions enforcement", out, "enforcement: blocking");
 
   expect("creates repo-policy.json", existsSync(join(dir, "repo-policy.json")), true);
   expect("creates workflow", existsSync(join(dir, ".github/workflows/repo-guard.yml")), true);
@@ -77,16 +77,17 @@ for (const preset of ["application", "library", "tooling", "documentation"]) {
   }
 }
 
-// --- advisory mode relaxes budgets ---
+// --- advisory mode sets non-blocking enforcement without changing budgets ---
 
-console.log("\n--- advisory mode budgets ---");
+console.log("\n--- advisory mode enforcement ---");
 {
   const dir = makeTmpDir();
   runInit(`--repo-root ${dir} init --preset library --mode advisory`);
   const policy = JSON.parse(readFileSync(join(dir, "repo-policy.json"), "utf-8"));
-  expect("advisory max_new_files", policy.diff_rules.max_new_files, 50);
-  expect("advisory max_new_docs", policy.diff_rules.max_new_docs, 10);
-  expect("advisory max_net_added_lines", policy.diff_rules.max_net_added_lines, 5000);
+  expect("advisory enforcement mode", policy.enforcement.mode, "advisory");
+  expect("advisory preserves preset max_new_files", policy.diff_rules.max_new_files, 15);
+  expect("advisory preserves preset max_new_docs", policy.diff_rules.max_new_docs, 2);
+  expect("advisory preserves preset max_net_added_lines", policy.diff_rules.max_net_added_lines, 1000);
 }
 
 // --- enforce mode uses preset budgets ---
@@ -96,9 +97,22 @@ console.log("\n--- enforce mode budgets ---");
   const dir = makeTmpDir();
   runInit(`--repo-root ${dir} init --preset library --mode enforce`);
   const policy = JSON.parse(readFileSync(join(dir, "repo-policy.json"), "utf-8"));
+  expect("enforce maps to blocking enforcement", policy.enforcement.mode, "blocking");
   expect("enforce max_new_files", policy.diff_rules.max_new_files, 15);
   expect("enforce max_new_docs", policy.diff_rules.max_new_docs, 2);
   expect("enforce max_net_added_lines", policy.diff_rules.max_net_added_lines, 1000);
+}
+
+// --- --enforcement alias works with init ---
+
+console.log("\n--- enforcement alias ---");
+{
+  const dir = makeTmpDir();
+  runInit(`--repo-root ${dir} --enforcement warn init --preset tooling`);
+  const policy = JSON.parse(readFileSync(join(dir, "repo-policy.json"), "utf-8"));
+  const workflow = readFileSync(join(dir, ".github/workflows/repo-guard.yml"), "utf-8");
+  expect("warn alias maps to advisory policy", policy.enforcement.mode, "advisory");
+  expectIncludes("warn alias maps to advisory workflow", workflow, "enforcement: advisory");
 }
 
 // --- idempotency: skips existing files ---
@@ -133,6 +147,7 @@ console.log("\n--- workflow content ---");
   const workflow = readFileSync(join(dir, ".github/workflows/repo-guard.yml"), "utf-8");
   expectIncludes("workflow uses repo-guard action", workflow, "netkeep80/repo-guard@main");
   expectIncludes("workflow uses check-pr", workflow, "mode: check-pr");
+  expectIncludes("workflow uses blocking enforcement", workflow, "enforcement: blocking");
   expectIncludes("workflow has fetch-depth 0", workflow, "fetch-depth: 0");
   expectIncludes("workflow has GH_TOKEN", workflow, "GH_TOKEN");
 }

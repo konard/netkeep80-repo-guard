@@ -9,6 +9,8 @@ on:
 
 jobs:
   validate:
+    # repo-guard's own CI is intentionally blocking: this job protects the
+    # package, schemas, and reusable Action behavior before changes can merge.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,14 +53,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run PR policy check
+        # Self-host repo-guard in blocking mode once a PR is ready for review.
+        # Draft PRs stay unblocked so work-in-progress branches can iterate.
         if: github.event_name == 'pull_request' && !github.event.pull_request.draft
         uses: ./
         with:
           mode: check-pr
+          enforcement: blocking
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   smoke-pack:
+    # Packaging smoke tests are blocking because downstream users pin released
+    # artifacts and need the installable tarball to match the source tree.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

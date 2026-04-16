@@ -122,11 +122,13 @@ repo-guard init --preset documentation
 #### Режим enforcement
 
 ```bash
-repo-guard init --mode enforce    # по умолчанию — строгие бюджеты
-repo-guard init --mode advisory   # ослабленные бюджеты (50 файлов, 10 docs, 5000 строк)
+repo-guard init --mode enforce    # по умолчанию — blocking enforcement
+repo-guard init --mode advisory   # non-blocking advisory enforcement
 ```
 
-Режим `advisory` удобен для начала: бюджеты значительно расширены (50 файлов, 10 docs, 5000 строк), что снижает вероятность блокировки PR. Workflow по-прежнему запускается и сообщает о нарушениях, но широкие лимиты позволяют освоиться с repo-guard до перехода на строгий `enforce`.
+Режим `advisory` удобен для начала: `repo-guard` по-прежнему запускает все проверки и сообщает о нарушениях, но завершает policy run с exit code `0`, чтобы CI не блокировал PR из-за policy violations. Режим `enforce` является alias для `blocking`: нарушения policy приводят к exit code `1`.
+
+Бюджеты policy одинаково применяются в обоих режимах. Разница только в exit semantics и summary messaging.
 
 #### Использование с --repo-root
 
@@ -182,6 +184,12 @@ repo-guard check-diff --base main --head feature
 
 # Проверить diff с change contract
 repo-guard check-diff --contract path/to/contract.json
+
+# Наблюдать нарушения без падения job
+repo-guard --enforcement advisory check-diff --base main --head feature
+
+# Явно включить blocking mode (default)
+repo-guard --enforcement blocking check-diff --base main --head feature
 ```
 
 ### Проверка PR (в GitHub Actions)
@@ -195,6 +203,34 @@ repo-guard check-pr
 - `git` CLI с достаточной глубиной fetch для base...head diff;
 - `gh` CLI с авторизацией (для fallback на linked issue);
 - event payload типа `pull_request` с base/head SHA.
+
+### Advisory vs blocking
+
+`repo-guard` separates command mode (`check-pr`, `check-diff`) from enforcement behavior:
+
+| Enforcement | Aliases | Exit behavior |
+|---|---|---|
+| `advisory` | `warn` | Policy violations are printed as `WARN` and the command exits `0`. |
+| `blocking` | `enforce` | Policy violations are printed as `FAIL` and the command exits `1`. |
+
+Set the behavior in invocation:
+
+```bash
+repo-guard --enforcement advisory check-pr
+repo-guard --enforcement blocking check-diff --base main --head feature
+```
+
+Or set a default in `repo-policy.json`:
+
+```json
+{
+  "enforcement": {
+    "mode": "advisory"
+  }
+}
+```
+
+CLI invocation wins over policy config. Advisory mode only makes policy violations non-blocking; setup/configuration errors such as invalid policy JSON, missing `git`, or missing GitHub Actions event context still fail.
 
 ### Диагностика окружения
 
@@ -294,6 +330,9 @@ node src/repo-guard.mjs
 {
   "policy_format_version": "0.1.0",
   "repository_kind": "application",
+  "enforcement": {
+    "mode": "blocking"
+  },
   "paths": {
     "forbidden": [],
     "canonical_docs": ["README.md"],
@@ -338,6 +377,8 @@ Contract говорит: это bugfix, который должен затрон
 
 ```
 OK: repo-policy.json
+Enforcement mode: blocking (policy violations are enforced; exit code is 1 when violations exist)
+  PASS: change-contract
 
 Diff analysis: 3 file(s) changed
   PASS: forbidden-paths
@@ -349,7 +390,8 @@ Diff analysis: 3 file(s) changed
   PASS: must-touch
   PASS: must-not-touch
 
-Summary: 8 passed, 0 failed
+Summary: 9 passed, 0 failed (mode: blocking; violations enforced)
+Result: passed (mode: blocking; exit code 0)
 ```
 
 ### 4. Пример failure
@@ -397,6 +439,7 @@ jobs:
         uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
         with:
           mode: check-pr
+          enforcement: blocking
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -410,6 +453,7 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `mode` | no | `check-pr` | `check-pr` — validate a PR in GitHub Actions context. `check-diff` — validate a local diff between two refs. |
+| `enforcement` | no | `blocking` | `blocking`/`enforce` fails the job on policy violations. `advisory`/`warn` reports violations but exits successfully. |
 | `repo-root` | no | `$GITHUB_WORKSPACE` | Path to the directory containing `repo-policy.json`. |
 | `base` | no | _(empty)_ | Base git ref for diff (`check-diff` only). |
 | `head` | no | _(empty)_ | Head git ref for diff (`check-diff` only). |
@@ -431,9 +475,9 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 - name: repo-guard (advisory)
   id: guard
   uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
-  continue-on-error: true
   with:
     mode: check-pr
+    enforcement: advisory
   env:
     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -441,7 +485,19 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
   run: echo "repo-guard result: ${{ steps.guard.outputs.result }}"
 ```
 
-**Blocking** — the step fails the job if any check fails (default behaviour; no extra config needed).
+In advisory mode, the Action step exits successfully for policy violations, but `steps.guard.outputs.result` is still `failed` when checks found violations. Configuration/runtime errors still fail the step.
+
+**Blocking** — the step fails the job if any policy check fails (default behaviour):
+
+```yaml
+- name: repo-guard (blocking)
+  uses: netkeep80/repo-guard@vX.Y.Z
+  with:
+    mode: check-pr
+    enforcement: blocking
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
 
 ### Pinning the version
 
@@ -451,6 +507,7 @@ Pin to a release tag to get reproducible runs. The Action always executes the CL
 - uses: netkeep80/repo-guard@vX.Y.Z   # replace with a release tag, e.g. v1.2.3
   with:
     mode: check-pr
+    enforcement: blocking
   env:
     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -461,6 +518,7 @@ Pin to a release tag to get reproducible runs. The Action always executes the CL
 - uses: netkeep80/repo-guard@vX.Y.Z  # replace with latest release tag
   with:
     mode: check-diff
+    enforcement: advisory
     base: main
     head: ${{ github.sha }}
     contract: path/to/contract.json
@@ -481,7 +539,7 @@ Pin to a release tag to get reproducible runs. The Action always executes the CL
 ```yaml
 - name: Run PR policy check
   if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-  run: npx repo-guard check-pr
+  run: npx repo-guard --enforcement blocking check-pr
   env:
     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve, relative, dirname } from "node:path";
+import { normalizeEnforcementMode } from "./enforcement.mjs";
 
 const PRESETS = {
   application: {
@@ -48,20 +49,20 @@ const PRESETS = {
   },
 };
 
-const ADVISORY_OVERRIDES = {
-  diff_rules: { max_new_docs: 10, max_new_files: 50, max_net_added_lines: 5000 },
-};
-
-function buildPolicy(preset, mode) {
+function buildPolicy(preset, enforcementMode) {
   const base = JSON.parse(JSON.stringify(PRESETS[preset]));
-  const policy = { policy_format_version: "0.3.0", ...base };
-  if (mode === "advisory") {
-    Object.assign(policy.diff_rules, ADVISORY_OVERRIDES.diff_rules);
-  }
-  return policy;
+  return {
+    policy_format_version: "0.3.0",
+    repository_kind: base.repository_kind,
+    enforcement: { mode: enforcementMode },
+    paths: base.paths,
+    diff_rules: base.diff_rules,
+    content_rules: base.content_rules,
+    cochange_rules: base.cochange_rules,
+  };
 }
 
-function buildWorkflow() {
+function buildWorkflow(enforcementMode) {
   return `name: repo-guard policy check
 
 on:
@@ -81,6 +82,7 @@ jobs:
         uses: netkeep80/repo-guard@main
         with:
           mode: check-pr
+          enforcement: ${enforcementMode}
         env:
           GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
 `;
@@ -158,12 +160,14 @@ function writeIfAbsent(filePath, content, created, skipped) {
 
 export function runInit(roots, args) {
   let preset = "application";
-  let mode = "enforce";
+  let mode = roots.enforcementMode || "enforce";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--preset" && args[i + 1]) {
       preset = args[++i];
     } else if (args[i] === "--mode" && args[i + 1]) {
+      mode = args[++i];
+    } else if (args[i] === "--enforcement" && args[i + 1]) {
       mode = args[++i];
     } else if (args[i] === "--help") {
       printUsage();
@@ -181,21 +185,23 @@ export function runInit(roots, args) {
     process.exit(1);
   }
 
-  if (mode !== "advisory" && mode !== "enforce") {
-    console.error(`Unknown mode: ${mode}. Must be "advisory" or "enforce".`);
+  const enforcement = normalizeEnforcementMode(mode, "mode");
+  if (!enforcement.ok) {
+    console.error(enforcement.message);
     process.exit(1);
   }
+  const enforcementMode = enforcement.mode;
 
   const repoRoot = roots.repoRoot;
   const created = [];
   const skipped = [];
 
   const policyPath = resolve(repoRoot, "repo-policy.json");
-  const policyContent = JSON.stringify(buildPolicy(preset, mode), null, 2) + "\n";
+  const policyContent = JSON.stringify(buildPolicy(preset, enforcementMode), null, 2) + "\n";
   writeIfAbsent(policyPath, policyContent, created, skipped);
 
   const workflowPath = resolve(repoRoot, ".github/workflows/repo-guard.yml");
-  writeIfAbsent(workflowPath, buildWorkflow(), created, skipped);
+  writeIfAbsent(workflowPath, buildWorkflow(enforcementMode), created, skipped);
 
   const prTemplatePath = resolve(repoRoot, ".github/PULL_REQUEST_TEMPLATE.md");
   writeIfAbsent(prTemplatePath, buildPRTemplate(), created, skipped);
@@ -203,7 +209,7 @@ export function runInit(roots, args) {
   const issueTemplatePath = resolve(repoRoot, ".github/ISSUE_TEMPLATE/change-contract.yml");
   writeIfAbsent(issueTemplatePath, buildIssueTemplate(), created, skipped);
 
-  console.log(`repo-guard init (preset: ${preset}, mode: ${mode})\n`);
+  console.log(`repo-guard init (preset: ${preset}, enforcement: ${enforcementMode})\n`);
 
   if (created.length > 0) {
     console.log("Created:");
@@ -232,8 +238,10 @@ Scaffold a repo-guard setup in the current repository.
 Options:
   --preset <preset>  Repository preset (default: application)
                      Presets: application, library, tooling, documentation
-  --mode <mode>      Default enforcement mode (default: enforce)
-                     Modes: advisory (relaxed budgets), enforce (strict budgets)
+  --mode <mode>      Default enforcement behavior (default: enforce)
+                     Modes: advisory/warn (non-blocking), enforce/blocking (blocking)
+  --enforcement <mode>
+                     Alias for --mode
   --help             Show this help message
 
 Files created:

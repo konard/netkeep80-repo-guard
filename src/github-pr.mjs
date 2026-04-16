@@ -9,6 +9,12 @@ import {
   warnReservedPolicyFields,
 } from "./policy-compiler.mjs";
 import {
+  ajvErrors,
+  createCheckReporter,
+  printEnforcementMode,
+  resolveEnforcementMode,
+} from "./enforcement.mjs";
+import {
   parseDiff,
   filterOperationalPaths,
   checkForbiddenPaths,
@@ -36,6 +42,18 @@ function validate(ajv, schema, data, label) {
   }
   console.log(`OK: ${label}`);
   return true;
+}
+
+function validationCheck(ajv, schema, data, label) {
+  const valid = ajv.validate(schema, data);
+  if (valid) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    message: `${label} failed schema validation`,
+    errors: ajvErrors(ajv.errors),
+  };
 }
 
 export function loadGitHubEvent() {
@@ -96,7 +114,15 @@ export function checkPrerequisites() {
   return missing;
 }
 
-export function runCheckPR(roots) {
+export function runCheckPR(roots, args = []) {
+  for (const arg of args) {
+    if (arg.startsWith("-")) {
+      console.error(`Unknown option for check-pr: ${arg}`);
+      console.error("Usage: repo-guard check-pr [--enforcement <advisory|blocking>]");
+      process.exit(1);
+    }
+  }
+
   const prereqs = checkPrerequisites();
   if (prereqs.length > 0) {
     console.error("ERROR: check-pr prerequisites not met:");
@@ -115,32 +141,6 @@ export function runCheckPR(roots) {
   const { base, head, prBody, prNumber, repoFullName } = eventInfo;
   console.log(`PR #${prNumber}: checking contract and diff (${base?.slice(0, 7)}..${head?.slice(0, 7)})`);
 
-  let issueBody = null;
-  const prResult = extractContract(prBody);
-  if (!prResult.ok && prResult.error === "contract_not_found") {
-    const linkedIssues = extractLinkedIssueNumbers(prBody);
-    if (linkedIssues.length > 1) {
-      console.error(`ERROR [issue_link_ambiguous]: PR body references ${linkedIssues.length} issues (${linkedIssues.map(n => `#${n}`).join(", ")}); expected exactly one`);
-      process.exit(1);
-    }
-    if (linkedIssues.length === 1) {
-      console.log(`No contract in PR body; trying linked issue #${linkedIssues[0]}...`);
-      issueBody = fetchIssueBody(repoFullName, linkedIssues[0]);
-      if (!issueBody) {
-        console.error(`ERROR: Could not fetch issue #${linkedIssues[0]} body`);
-      }
-    }
-  }
-
-  const contractResult = resolveContract(prBody, issueBody);
-  if (!contractResult.ok) {
-    console.error(`ERROR [${contractResult.error}]: ${contractResult.message}`);
-    process.exit(1);
-  }
-
-  const contract = contractResult.contract;
-  console.log("OK: change-contract extracted");
-
   const policySchema = loadJSON(resolve(roots.packageRoot, "schemas/repo-policy.schema.json"));
   const contractSchema = loadJSON(resolve(roots.packageRoot, "schemas/change-contract.schema.json"));
   const policy = loadJSON(resolve(roots.repoRoot, "repo-policy.json"));
@@ -149,7 +149,6 @@ export function runCheckPR(roots) {
 
   let ok = true;
   ok = validate(ajv, policySchema, policy, "repo-policy.json") && ok;
-  ok = validate(ajv, contractSchema, contract, "change-contract (from markdown)") && ok;
 
   const regexErrors = compileForbidRegex(policy.content_rules);
   if (regexErrors.length > 0) {
@@ -163,13 +162,58 @@ export function runCheckPR(roots) {
   for (const w of warnReservedPolicyFields(policy)) {
     console.warn(`WARN: ${w}`);
   }
-  for (const w of warnReservedContractFields(contract)) {
-    console.warn(`WARN: ${w}`);
-  }
 
   if (!ok) {
     console.error("\nPolicy compilation failed");
     process.exit(1);
+  }
+
+  const enforcement = resolveEnforcementMode({ cliValue: roots.enforcementMode, policy });
+  if (!enforcement.ok) {
+    console.error(`ERROR: ${enforcement.message}`);
+    process.exit(1);
+  }
+  printEnforcementMode(enforcement);
+  const reporter = createCheckReporter(enforcement.mode);
+
+  let issueBody = null;
+  let contractFailure = null;
+  const prResult = extractContract(prBody);
+  if (!prResult.ok && prResult.error === "contract_not_found") {
+    const linkedIssues = extractLinkedIssueNumbers(prBody);
+    if (linkedIssues.length > 1) {
+      contractFailure = {
+        error: "issue_link_ambiguous",
+        message: `PR body references ${linkedIssues.length} issues (${linkedIssues.map(n => `#${n}`).join(", ")}); expected exactly one`,
+      };
+    } else if (linkedIssues.length === 1) {
+      console.log(`No contract in PR body; trying linked issue #${linkedIssues[0]}...`);
+      issueBody = fetchIssueBody(repoFullName, linkedIssues[0]);
+      if (!issueBody) {
+        contractFailure = {
+          error: "issue_fetch_failed",
+          message: `Could not fetch issue #${linkedIssues[0]} body`,
+        };
+      }
+    }
+  }
+
+  const contractResult = contractFailure || resolveContract(prBody, issueBody);
+  let contract = null;
+  if (!contractResult.ok) {
+    reporter.report("change-contract", {
+      ok: false,
+      message: `[${contractResult.error}]: ${contractResult.message}`,
+    });
+  } else {
+    const contractCheck = validationCheck(ajv, contractSchema, contractResult.contract, "change-contract (from markdown)");
+    reporter.report("change-contract", contractCheck);
+    if (contractCheck.ok) {
+      contract = contractResult.contract;
+      for (const w of warnReservedContractFields(contract)) {
+        console.warn(`WARN: ${w}`);
+      }
+    }
   }
 
   const diffText = execSync(`git diff ${base}...${head}`, { encoding: "utf-8", cwd: roots.repoRoot });
@@ -179,78 +223,48 @@ export function runCheckPR(roots) {
   const skipped = allFiles.length - files.length;
   console.log(`\nDiff analysis: ${allFiles.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
 
-  let passed = 0;
-  let failed = 0;
-
-  function report(name, check) {
-    if (check.ok) {
-      passed++;
-      console.log(`  PASS: ${name}`);
-    } else {
-      failed++;
-      ok = false;
-      console.error(`  FAIL: ${name}`);
-      if (check.actual !== undefined) {
-        console.error(`    actual: ${check.actual}, limit: ${check.limit}`);
-      }
-      if (check.files) {
-        for (const f of check.files) console.error(`    - ${f}`);
-      }
-      if (check.touched) {
-        for (const f of check.touched) console.error(`    - ${f}`);
-      }
-      if (check.must_touch) {
-        console.error(`    must_touch: ${check.must_touch.join(", ")}`);
-      }
-      if (check.hint) {
-        console.error(`    hint: ${check.hint}`);
-      }
-    }
-  }
-
   const forbiddenViolations = checkForbiddenPaths(files, policy.paths.forbidden);
-  report("forbidden-paths", {
+  reporter.report("forbidden-paths", {
     ok: forbiddenViolations.length === 0,
     files: forbiddenViolations,
   });
 
-  const budgets = contract.budgets || {};
+  const budgets = contract?.budgets || {};
   const maxNewDocs = budgets.max_new_docs ?? policy.diff_rules.max_new_docs;
   const maxNewFiles = budgets.max_new_files ?? policy.diff_rules.max_new_files;
   const maxNetAddedLines = budgets.max_net_added_lines ?? policy.diff_rules.max_net_added_lines;
 
-  report("canonical-docs-budget", checkCanonicalDocsBudget(files, policy.paths.canonical_docs, maxNewDocs));
-  report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
-  report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
+  reporter.report("canonical-docs-budget", checkCanonicalDocsBudget(files, policy.paths.canonical_docs, maxNewDocs));
+  reporter.report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
+  reporter.report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
 
   const cochangeViolations = checkCochangeRules(files, policy.cochange_rules);
   if (cochangeViolations.length > 0) {
     for (const v of cochangeViolations) {
-      report(`cochange: ${v.if_changed.join(",")} -> ${v.must_change_any.join(",")}`, {
+      reporter.report(`cochange: ${v.if_changed.join(",")} -> ${v.must_change_any.join(",")}`, {
         ok: false,
         must_touch: v.must_change_any,
       });
     }
   } else {
-    report("cochange-rules", { ok: true });
+    reporter.report("cochange-rules", { ok: true });
   }
 
   const contentViolations = checkContentRules(files, policy.content_rules);
   if (contentViolations.length > 0) {
-    ok = false;
-    failed++;
-    console.error("  FAIL: content-rules");
-    for (const v of contentViolations) {
-      console.error(`    [${v.rule_id}] ${v.file}: "${v.line}" matched /${v.matched_regex}/`);
-    }
+    reporter.report("content-rules", {
+      ok: false,
+      details: contentViolations.map((v) => `[${v.rule_id}] ${v.file}: "${v.line}" matched /${v.matched_regex}/`),
+    });
   } else {
-    passed++;
-    console.log("  PASS: content-rules");
+    reporter.report("content-rules", { ok: true });
   }
 
-  report("must-touch", checkMustTouch(files, contract.must_touch));
-  report("must-not-touch", checkMustNotTouch(files, contract.must_not_touch));
+  if (contract) {
+    reporter.report("must-touch", checkMustTouch(files, contract.must_touch));
+    reporter.report("must-not-touch", checkMustNotTouch(files, contract.must_not_touch));
+  }
 
-  console.log(`\nSummary: ${passed} passed, ${failed} failed`);
-  process.exit(ok ? 0 : 1);
+  const summary = reporter.finish();
+  process.exit(summary.exitCode);
 }

@@ -9,11 +9,19 @@ branding:
 inputs:
   mode:
     description: >
-      Enforcement mode. Use `check-pr` to validate a pull request against policy
+      Command mode. Use `check-pr` to validate a pull request against policy
       and change contract (requires GitHub Actions PR event context). Use `check-diff`
       to validate a local diff between two refs.
     required: false
     default: "check-pr"
+
+  enforcement:
+    description: >
+      Policy enforcement behavior. `blocking`/`enforce` fails the job when
+      policy violations are found. `advisory`/`warn` reports violations but
+      exits successfully so teams can observe noise before enforcing.
+    required: false
+    default: "blocking"
 
   repo-root:
     description: >
@@ -52,7 +60,8 @@ outputs:
   result:
     description: >
       Enforcement result: `passed` if all checks passed, `failed` if any check
-      failed, or `error` if repo-guard could not run (e.g. missing policy file).
+      failed (including advisory violations), or `error` if repo-guard could not
+      run (e.g. missing policy file).
     value: ${{ steps.run-repo-guard.outputs.result }}
 
   summary:
@@ -95,7 +104,12 @@ runs:
         fi
         CMD="$CMD --repo-root $REPO_ROOT"
 
-        # Append mode / sub-command
+        # Append enforcement behavior and command mode / sub-command
+        ENFORCEMENT="${{ inputs.enforcement }}"
+        if [ -n "$ENFORCEMENT" ]; then
+          CMD="$CMD --enforcement $ENFORCEMENT"
+        fi
+
         MODE="${{ inputs.mode }}"
         CMD="$CMD $MODE"
 
@@ -118,10 +132,13 @@ runs:
 
         echo "$OUTPUT"
 
-        # Derive result and summary outputs
+        # Derive result and summary outputs. Advisory mode can exit 0 while
+        # still reporting policy violations, so prefer the CLI Result line.
+        CLI_RESULT=$(echo "$OUTPUT" | sed -nE 's/^Result: ([a-z]+).*/\1/p' | tail -1)
+        SUMMARY=$(echo "$OUTPUT" | grep -E "^Summary:" | tail -1)
+
         if [ $EXIT_CODE -eq 0 ]; then
-          RESULT="passed"
-          SUMMARY=$(echo "$OUTPUT" | grep -E "^Summary:" | tail -1)
+          RESULT="${CLI_RESULT:-passed}"
           if [ -z "$SUMMARY" ]; then
             SUMMARY="repo-guard: all checks passed"
           fi
@@ -130,9 +147,8 @@ runs:
           if echo "$OUTPUT" | grep -qE "^(ERROR|FAIL: repo-policy)"; then
             RESULT="error"
           else
-            RESULT="failed"
+            RESULT="${CLI_RESULT:-failed}"
           fi
-          SUMMARY=$(echo "$OUTPUT" | grep -E "^Summary:" | tail -1)
           if [ -z "$SUMMARY" ]; then
             SUMMARY="repo-guard: one or more checks failed (exit $EXIT_CODE)"
           fi

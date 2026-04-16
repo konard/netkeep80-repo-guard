@@ -21,6 +21,19 @@
       "type": "string",
       "enum": ["library", "application", "tooling", "documentation"]
     },
+    "enforcement": {
+      "type": "object",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "description": "Optional default enforcement behavior. CLI or Action invocation can override it.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["advisory", "blocking"],
+          "description": "advisory reports policy violations as warnings and exits 0; blocking enforces violations with exit 1."
+        }
+      }
+    },
     "paths": {
       "type": "object",
       "required": ["forbidden", "canonical_docs", "governance_paths"],

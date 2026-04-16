@@ -22,27 +22,42 @@ import {
   warnReservedContractFields,
   warnReservedPolicyFields,
 } from "./policy-compiler.mjs";
+import {
+  ajvErrors,
+  createCheckReporter,
+  printEnforcementMode,
+  resolveEnforcementMode,
+} from "./enforcement.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
 
 export function resolveRoots(args) {
   let repoRoot = process.cwd();
+  let enforcementMode = null;
   const filtered = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--repo-root") {
       const next = args[i + 1];
       if (!next || next.startsWith("-")) {
         console.error("Error: --repo-root requires a path argument");
-        console.error("Usage: repo-guard [--repo-root <path>] [check-diff|check-pr|init|doctor] [options]");
+        console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor] [options]");
         process.exit(1);
       }
       repoRoot = resolve(args[++i]);
+    } else if (args[i] === "--enforcement" || args[i] === "--enforcement-mode") {
+      const next = args[i + 1];
+      if (!next || next.startsWith("-")) {
+        console.error(`Error: ${args[i]} requires a mode argument`);
+        console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor] [options]");
+        process.exit(1);
+      }
+      enforcementMode = args[++i];
     } else {
       filtered.push(args[i]);
     }
   }
-  return { packageRoot, repoRoot, args: filtered };
+  return { packageRoot, repoRoot, enforcementMode, args: filtered };
 }
 
 function loadJSON(path) {
@@ -60,6 +75,18 @@ function validate(ajv, schema, data, label) {
   }
   console.log(`OK: ${label}`);
   return true;
+}
+
+function validationCheck(ajv, schema, data, label) {
+  const valid = ajv.validate(schema, data);
+  if (valid) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    message: `${label} failed schema validation`,
+    errors: ajvErrors(ajv.errors),
+  };
 }
 
 function getDiff(base, head, cwd) {
@@ -98,24 +125,19 @@ function runCheckDiff(roots, args) {
     console.warn(`WARN: ${w}`);
   }
 
-  let contract = null;
   let base = null;
   let head = null;
+  let contractPath = null;
   const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract"]);
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--base" && args[i + 1]) base = args[++i];
     else if (args[i] === "--head" && args[i + 1]) head = args[++i];
     else if (args[i] === "--contract" && args[i + 1]) {
-      const contractPath = resolve(roots.repoRoot, args[++i]);
-      contract = loadJSON(contractPath);
-      ok = validate(ajv, contractSchema, contract, contractPath) && ok;
-      for (const w of warnReservedContractFields(contract)) {
-        console.warn(`WARN: ${w}`);
-      }
+      contractPath = resolve(roots.repoRoot, args[++i]);
     } else if (args[i].startsWith("-") && !KNOWN_DIFF_OPTS.has(args[i])) {
       console.error(`Unknown option for check-diff: ${args[i]}`);
-      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>]");
+      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--enforcement <advisory|blocking>]");
       process.exit(1);
     }
   }
@@ -125,6 +147,34 @@ function runCheckDiff(roots, args) {
     process.exit(1);
   }
 
+  const enforcement = resolveEnforcementMode({ cliValue: roots.enforcementMode, policy });
+  if (!enforcement.ok) {
+    console.error(`ERROR: ${enforcement.message}`);
+    process.exit(1);
+  }
+  printEnforcementMode(enforcement);
+  const reporter = createCheckReporter(enforcement.mode);
+
+  let contract = null;
+  if (contractPath) {
+    try {
+      const loadedContract = loadJSON(contractPath);
+      const contractCheck = validationCheck(ajv, contractSchema, loadedContract, contractPath);
+      reporter.report("change-contract", contractCheck);
+      if (contractCheck.ok) {
+        contract = loadedContract;
+        for (const w of warnReservedContractFields(contract)) {
+          console.warn(`WARN: ${w}`);
+        }
+      }
+    } catch (e) {
+      reporter.report("change-contract", {
+        ok: false,
+        message: `Cannot read ${contractPath}: ${e.message}`,
+      });
+    }
+  }
+
   const diffText = getDiff(base, head, roots.repoRoot);
   const allFiles = parseDiff(diffText);
   const files = filterOperationalPaths(allFiles, policy.paths.operational_paths);
@@ -132,37 +182,8 @@ function runCheckDiff(roots, args) {
   const skipped = allFiles.length - files.length;
   console.log(`\nDiff analysis: ${allFiles.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
 
-  let passed = 0;
-  let failed = 0;
-
-  function report(name, check) {
-    if (check.ok) {
-      passed++;
-      console.log(`  PASS: ${name}`);
-    } else {
-      failed++;
-      ok = false;
-      console.error(`  FAIL: ${name}`);
-      if (check.actual !== undefined) {
-        console.error(`    actual: ${check.actual}, limit: ${check.limit}`);
-      }
-      if (check.files) {
-        for (const f of check.files) console.error(`    - ${f}`);
-      }
-      if (check.touched) {
-        for (const f of check.touched) console.error(`    - ${f}`);
-      }
-      if (check.must_touch) {
-        console.error(`    must_touch: ${check.must_touch.join(", ")}`);
-      }
-      if (check.hint) {
-        console.error(`    hint: ${check.hint}`);
-      }
-    }
-  }
-
   const forbiddenViolations = checkForbiddenPaths(files, policy.paths.forbidden);
-  report("forbidden-paths", {
+  reporter.report("forbidden-paths", {
     ok: forbiddenViolations.length === 0,
     files: forbiddenViolations,
   });
@@ -172,42 +193,39 @@ function runCheckDiff(roots, args) {
   const maxNewFiles = budgets.max_new_files ?? policy.diff_rules.max_new_files;
   const maxNetAddedLines = budgets.max_net_added_lines ?? policy.diff_rules.max_net_added_lines;
 
-  report("canonical-docs-budget", checkCanonicalDocsBudget(files, policy.paths.canonical_docs, maxNewDocs));
-  report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
-  report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
+  reporter.report("canonical-docs-budget", checkCanonicalDocsBudget(files, policy.paths.canonical_docs, maxNewDocs));
+  reporter.report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
+  reporter.report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
 
   const cochangeViolations = checkCochangeRules(files, policy.cochange_rules);
   if (cochangeViolations.length > 0) {
     for (const v of cochangeViolations) {
-      report(`cochange: ${v.if_changed.join(",")} -> ${v.must_change_any.join(",")}`, {
+      reporter.report(`cochange: ${v.if_changed.join(",")} -> ${v.must_change_any.join(",")}`, {
         ok: false,
         must_touch: v.must_change_any,
       });
     }
   } else {
-    report("cochange-rules", { ok: true });
+    reporter.report("cochange-rules", { ok: true });
   }
 
   const contentViolations = checkContentRules(files, policy.content_rules);
   if (contentViolations.length > 0) {
-    ok = false;
-    failed++;
-    console.error(`  FAIL: content-rules`);
-    for (const v of contentViolations) {
-      console.error(`    [${v.rule_id}] ${v.file}: "${v.line}" matched /${v.matched_regex}/`);
-    }
+    reporter.report("content-rules", {
+      ok: false,
+      details: contentViolations.map((v) => `[${v.rule_id}] ${v.file}: "${v.line}" matched /${v.matched_regex}/`),
+    });
   } else {
-    passed++;
-    console.log(`  PASS: content-rules`);
+    reporter.report("content-rules", { ok: true });
   }
 
   if (contract) {
-    report("must-touch", checkMustTouch(files, contract.must_touch));
-    report("must-not-touch", checkMustNotTouch(files, contract.must_not_touch));
+    reporter.report("must-touch", checkMustTouch(files, contract.must_touch));
+    reporter.report("must-not-touch", checkMustNotTouch(files, contract.must_not_touch));
   }
 
-  console.log(`\nSummary: ${passed} passed, ${failed} failed`);
-  process.exit(ok ? 0 : 1);
+  const summary = reporter.finish();
+  process.exit(summary.exitCode);
 }
 
 function runValidate(roots, args) {
@@ -258,7 +276,7 @@ if (isMain) {
 
   if (command && !MODES.has(command) && command.startsWith("-")) {
     console.error(`Unknown option: ${command}`);
-    console.error("Usage: repo-guard [--repo-root <path>] [check-diff|check-pr|init|doctor] [options]");
+    console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor] [options]");
     process.exit(1);
   }
 
@@ -268,7 +286,7 @@ if (isMain) {
   } else if (command === "check-pr") {
     roots.args = roots.args.slice(1);
     const { runCheckPR } = await import("./github-pr.mjs");
-    runCheckPR(roots);
+    runCheckPR(roots, roots.args);
   } else if (command === "init") {
     roots.args = roots.args.slice(1);
     const { runInit } = await import("./init.mjs");

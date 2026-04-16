@@ -1,6 +1,9 @@
 {
   "policy_format_version": "0.3.0",
   "repository_kind": "tooling",
+  "enforcement": {
+    "mode": "blocking"
+  },
   "paths": {
     "forbidden": [
       "docs/phase-*",
