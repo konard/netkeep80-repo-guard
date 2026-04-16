@@ -622,6 +622,26 @@ Pin to a release tag to get reproducible runs. The Action always executes the CL
 - Для корректной работы diff нужен `fetch-depth: 0` в `actions/checkout`.
 - `gh` CLI требует токен для доступа к linked issue (через `GH_TOKEN`).
 
+## Self-hosting
+
+This repository is governed by `repo-guard` itself. The CI workflow runs the checked-out local Action (`uses: ./`) on ready pull requests in `blocking` mode, so changes to the package, schemas, templates, workflow, and docs are checked through the same `check-pr` integration path that downstream repositories use. Draft pull requests are excluded only to keep work-in-progress branches unblocked before review.
+
+The same workflow also runs an advisory-mode fixture with `check-diff`. That fixture intentionally creates a policy violation and verifies that advisory mode reports `Result: failed` while keeping the job step successful. This keeps both rollout modes covered by the repo's normal CI.
+
+The self-hosted governance surface is declared in `repo-policy.json` under `paths.governance_paths`:
+
+| Path | Why it is governed |
+|---|---|
+| `repo-policy.json` | Defines the policy used by this repository and the default blocking mode. |
+| `schemas/` | Defines the accepted policy and change contract formats. |
+| `.github/workflows/` | Runs the self-hosted checks that protect pull requests. |
+| `.github/PULL_REQUEST_TEMPLATE.md` | Captures the change contract expected by `check-pr`. |
+| `.github/ISSUE_TEMPLATE/` | Captures linked issue contracts used by PR fallback. |
+| `templates/` | Ships the example policy, workflow, and contract templates used by adopters. |
+| `action.yml` | Defines the reusable GitHub Action interface and execution path. |
+
+`governance_paths` is informational today, but changes in these paths are treated as product changes: failures in self-hosting are bugs in the repository workflow, not downstream-only setup problems. GitHub workflow and template files are deliberately not listed as `operational_paths`, so they cannot bypass normal policy checks.
+
 ## Ограничения и текущий статус
 
 - `governance_paths` — информационное поле, не проверяется в runtime. Документирует, какие файлы управляют governance.

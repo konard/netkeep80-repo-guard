@@ -15,7 +15,12 @@
     ],
     "governance_paths": [
       "repo-policy.json",
-      "schemas/"
+      "schemas/",
+      ".github/workflows/",
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".github/ISSUE_TEMPLATE/",
+      "templates/",
+      "action.yml"
     ],
     "operational_paths": [
       ".claude/**",

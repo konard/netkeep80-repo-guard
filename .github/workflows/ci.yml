@@ -63,6 +63,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Exercise advisory policy mode
+        run: |
+          set -euo pipefail
+          TMP_FILE="$(mktemp)"
+          cp README.md "$TMP_FILE"
+          trap 'cp "$TMP_FILE" README.md; rm -f "$TMP_FILE"; git reset --quiet README.md' EXIT
+
+          printf '\n%s: advisory fixture\n' "TO""DO" >> README.md
+          git add README.md
+          OUTPUT="$(node src/repo-guard.mjs --enforcement advisory check-diff 2>&1)"
+          STATUS=$?
+          printf '%s\n' "$OUTPUT"
+
+          test "$STATUS" -eq 0
+
+          echo "$OUTPUT" | grep -q "WARN: content-rules"
+          echo "$OUTPUT" | grep -q "Result: failed"
+          echo "$OUTPUT" | grep -q "mode: advisory"
+
   smoke-pack:
     # Packaging smoke tests are blocking because downstream users pin released
     # artifacts and need the installable tarball to match the source tree.
