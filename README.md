@@ -54,6 +54,7 @@ Policy engine для репозитория: формализует правил
 | Max new files | Ограничивает общее количество новых файлов |
 | Max net added lines | Ограничивает `added − deleted` строк |
 | Co-change rules | Если изменён X, должен быть изменён и Y |
+| Surface matrix | Проверяет, что объявленный `change_class` трогает только разрешённые surface-классы |
 | Content rules | Запрещает regex-паттерны в добавленных строках |
 | must_touch | Хотя бы один из указанных паттернов должен совпасть с изменённым файлом (из contract) |
 | must_not_touch | Ни один из указанных паттернов не должен совпасть с изменённым файлом (из contract) |
@@ -184,6 +185,9 @@ repo-guard check-diff --base main --head feature
 
 # Проверить diff с change contract
 repo-guard check-diff --contract path/to/contract.json
+
+# Проверить diff с явным change class для surface_matrix
+repo-guard check-diff --change-class docs-cleanup
 
 # Наблюдать нарушения без падения job
 repo-guard --enforcement advisory check-diff --base main --head feature
@@ -425,6 +429,7 @@ node src/repo-guard.mjs
 ````markdown
 ```repo-guard-yaml
 change_type: bugfix
+change_class: kernel-hardening
 scope:
   - src/pagination.mjs
 budgets:
@@ -443,6 +448,8 @@ expected_effects:
 Contract говорит: это bugfix, который должен затронуть `src/pagination.mjs`, не должен трогать схемы и policy, и не должен создавать новых файлов.
 
 Для существующих PR сохраняется совместимость с JSON-блоком ` ```repo-guard-json `; оба формата дают одну и ту же нормализованную модель contract перед schema validation.
+
+`change_class` опционален для обычных policy. Он становится обязательным для diff, который трогает объявленные surfaces, если в policy включён `surface_matrix`.
 
 ### 3. Что проверяет repo-guard
 
@@ -482,6 +489,93 @@ Result: passed (mode: blocking; exit code 0)
   FAIL: cochange: src/** -> tests/**
     must_touch: tests/**
 ```
+
+## Ownership-aware surfaces
+
+Глобальный `paths.forbidden` хорошо работает для файлов, которые нельзя трогать никогда. Но generated, release или governance surfaces часто нельзя запрещать глобально: regeneration PR должен иметь право менять generated-файлы, а обычный docs PR — нет.
+
+Для этого policy может объявить named surfaces, named change classes и матрицу допустимых сочетаний:
+
+```json
+{
+  "surfaces": {
+    "kernel": ["src/**", "include/**"],
+    "tests": ["tests/**"],
+    "docs": ["docs/**", "README.md"],
+    "governance": ["repo-policy.json", ".github/**"],
+    "release": ["CHANGELOG.md", "package.json"],
+    "generated": ["single_include/**"]
+  },
+  "change_classes": [
+    "kernel-hardening",
+    "docs-cleanup",
+    "generated-refresh"
+  ],
+  "allow_unclassified_files": false,
+  "surface_matrix": {
+    "kernel-hardening": {
+      "allow": ["kernel", "tests"],
+      "forbid": ["generated", "release"]
+    },
+    "docs-cleanup": {
+      "allow": ["docs", "governance"],
+      "forbid": ["kernel", "tests", "generated", "release"]
+    },
+    "generated-refresh": {
+      "allow": ["generated", "release"],
+      "forbid": ["kernel", "docs", "governance"]
+    }
+  }
+}
+```
+
+Затем intent задаётся в contract:
+
+```yaml
+change_type: chore
+change_class: generated-refresh
+scope:
+  - single_include/
+budgets: {}
+must_touch:
+  - single_include/
+must_not_touch: []
+expected_effects:
+  - Regenerated bundled artifact
+```
+
+Для local/CI `check-diff` без contract можно передать тот же intent флагом:
+
+```bash
+repo-guard check-diff --base main --head feature --change-class generated-refresh
+```
+
+Если `docs-cleanup` PR затронет `src/core.mjs`, output явно покажет объявленный class, detected surfaces и нарушившую комбинацию:
+
+```text
+  FAIL: surface-matrix
+    change_class "docs-cleanup" cannot touch surfaces: kernel
+    change_class: docs-cleanup
+    touched_surfaces: docs, kernel
+    allowed_surfaces: docs, governance
+    forbidden_surfaces: generated, kernel, release, tests
+    violating_surfaces: kernel
+    surface kernel matched: src/core.mjs
+```
+
+Файл может совпасть с несколькими surfaces; repo-guard считает все совпадения. Когда `surface_matrix` включён, changed file, который не совпал ни с одной surface, по умолчанию считается нарушением:
+
+```text
+  FAIL: surface-matrix
+    surface_matrix found changed files that match no declared surface: scripts/tool.mjs
+    change_class: docs-cleanup
+    touched_surfaces: (none)
+    unclassified_files: scripts/tool.mjs
+    changed files matched no declared surface: scripts/tool.mjs
+    hint: Add matching surface globs or set allow_unclassified_files: true if unclassified files are intentional.
+```
+
+Если policy намеренно описывает только часть репозитория, можно явно включить `"allow_unclassified_files": true`. По умолчанию это `false`, чтобы matrix-проверку нельзя было обойти файлами вне объявленных surfaces.
 
 ## GitHub Action (reusable)
 
@@ -531,6 +625,7 @@ A copy-pasteable version of this workflow is also available at [`templates/examp
 | `base` | no | _(empty)_ | Base git ref for diff (`check-diff` only). |
 | `head` | no | _(empty)_ | Head git ref for diff (`check-diff` only). |
 | `contract` | no | _(empty)_ | Path to a contract JSON file, relative to `repo-root` (`check-diff` only). |
+| `change-class` | no | _(empty)_ | Named change class for `surface_matrix` enforcement (`check-diff` only). Overrides contract `change_class` when set. |
 | `node-version` | no | `20` | Node.js version used to run repo-guard. |
 
 ### Outputs
@@ -595,6 +690,7 @@ Pin to a release tag to get reproducible runs. The Action always executes the CL
     base: main
     head: ${{ github.sha }}
     contract: path/to/contract.json
+    change-class: docs-cleanup
 ```
 
 ## Использование в GitHub PR workflow

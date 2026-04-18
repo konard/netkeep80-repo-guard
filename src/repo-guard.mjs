@@ -13,12 +13,14 @@ import {
   checkNewFilesBudget,
   checkNetAddedLinesBudget,
   checkCochangeRules,
+  checkSurfaceMatrix,
   checkContentRules,
   checkMustTouch,
   checkMustNotTouch,
 } from "./diff-checker.mjs";
 import {
   compileForbidRegex,
+  compileSurfacePolicy,
   warnReservedContractFields,
   warnReservedPolicyFields,
 } from "./policy-compiler.mjs";
@@ -109,8 +111,9 @@ function runCheckDiff(roots, args) {
   let base = null;
   let head = null;
   let contractPath = null;
+  let cliChangeClass = null;
   let format = "text";
-  const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract", "--format"]);
+  const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract", "--format", "--change-class"]);
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--base" && args[i + 1]) base = args[++i];
@@ -119,16 +122,25 @@ function runCheckDiff(roots, args) {
       contractPath = resolve(roots.repoRoot, args[++i]);
     } else if (args[i] === "--format" && args[i + 1]) {
       format = args[++i];
+    } else if (args[i] === "--change-class") {
+      const next = args[i + 1];
+      if (!next || next.startsWith("-")) {
+        console.error("Error: --change-class requires a name argument");
+        console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+        process.exit(1);
+      }
+      cliChangeClass = next;
+      i++;
     } else if (args[i].startsWith("-") && !KNOWN_DIFF_OPTS.has(args[i])) {
       console.error(`Unknown option for check-diff: ${args[i]}`);
-      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
       process.exit(1);
     }
   }
 
   if (!["text", "json", "summary"].includes(format)) {
     console.error(`Unknown check-diff format: ${format}`);
-    console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+    console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
     process.exit(1);
   }
 
@@ -150,6 +162,17 @@ function runCheckDiff(roots, args) {
       console.error("FAIL: forbid_regex compilation");
       for (const e of regexErrors) {
         console.error(`  [${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`);
+      }
+    }
+  }
+
+  const surfaceErrors = compileSurfacePolicy(policy);
+  if (surfaceErrors.length > 0) {
+    ok = false;
+    if (!quiet) {
+      console.error("FAIL: surface policy compilation");
+      for (const e of surfaceErrors) {
+        console.error(`  ${e.message}`);
       }
     }
   }
@@ -216,6 +239,20 @@ function runCheckDiff(roots, args) {
   reporter.report("canonical-docs-budget", checkCanonicalDocsBudget(files, policy.paths.canonical_docs, maxNewDocs));
   reporter.report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
   reporter.report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
+
+  if (policy.surface_matrix) {
+    const declaredChangeClass = cliChangeClass || contract?.change_class || null;
+    reporter.report(
+      "surface-matrix",
+      checkSurfaceMatrix(
+        files,
+        policy.surfaces,
+        policy.surface_matrix,
+        declaredChangeClass,
+        { allow_unclassified_files: policy.allow_unclassified_files }
+      )
+    );
+  }
 
   const cochangeViolations = checkCochangeRules(files, policy.cochange_rules);
   if (cochangeViolations.length > 0) {

@@ -12,6 +12,9 @@
     "cochange_rules"
   ],
   "additionalProperties": false,
+  "dependencies": {
+    "surface_matrix": ["surfaces", "change_classes"]
+  },
   "properties": {
     "policy_format_version": {
       "type": "string",
@@ -80,6 +83,50 @@
         "max_net_added_lines": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "surfaces": {
+      "type": "object",
+      "description": "Named repository surfaces mapped to one or more path globs. A changed file can match multiple surfaces.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 },
+        "minItems": 1
+      }
+    },
+    "change_classes": {
+      "type": "array",
+      "description": "Named change classes that can be declared by a change contract or check-diff --change-class.",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "allow_unclassified_files": {
+      "type": "boolean",
+      "description": "When surface_matrix is enabled, changed files that match no declared surface fail by default. Set this true only when partial surface coverage is intentional."
+    },
+    "surface_matrix": {
+      "type": "object",
+      "description": "Allowed repository surface combinations for each named change class.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["allow"],
+        "additionalProperties": false,
+        "properties": {
+          "allow": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "forbid": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
         }
       }
     },

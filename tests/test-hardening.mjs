@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   compileForbidRegex,
+  compileSurfacePolicy,
   warnReservedContractFields,
   warnReservedPolicyFields,
 } from "../src/policy-compiler.mjs";
@@ -54,6 +55,60 @@ describe("forbid_regex eager validation", () => {
     ];
     const errors = compileForbidRegex(rules);
     assert.equal(errors.length, 0);
+  });
+});
+
+describe("surface policy compilation", () => {
+  it("accepts matrix references to declared surfaces and change classes", () => {
+    const errors = compileSurfacePolicy({
+      surfaces: {
+        kernel: ["src/**"],
+        tests: ["tests/**"],
+      },
+      change_classes: ["kernel-hardening"],
+      surface_matrix: {
+        "kernel-hardening": {
+          allow: ["kernel", "tests"],
+          forbid: [],
+        },
+      },
+    });
+    assert.equal(errors.length, 0);
+  });
+
+  it("rejects matrix entries that reference unknown surfaces", () => {
+    const errors = compileSurfacePolicy({
+      surfaces: {
+        docs: ["docs/**"],
+      },
+      change_classes: ["docs-cleanup"],
+      surface_matrix: {
+        "docs-cleanup": {
+          allow: ["docs", "kernel"],
+          forbid: ["generated"],
+        },
+      },
+    });
+    assert.equal(errors.length, 2);
+    assert.ok(errors.some((e) => e.message.includes("kernel")));
+    assert.ok(errors.some((e) => e.message.includes("generated")));
+  });
+
+  it("rejects matrix entries that are not declared change classes", () => {
+    const errors = compileSurfacePolicy({
+      surfaces: {
+        docs: ["docs/**"],
+      },
+      change_classes: ["docs-cleanup"],
+      surface_matrix: {
+        release: {
+          allow: ["docs"],
+          forbid: [],
+        },
+      },
+    });
+    assert.equal(errors.length, 1);
+    assert.ok(errors[0].message.includes("change_classes"));
   });
 });
 

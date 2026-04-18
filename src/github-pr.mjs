@@ -5,6 +5,7 @@ import Ajv from "ajv";
 import { extractContract, extractLinkedIssueNumbers, resolveContract } from "./markdown-contract.mjs";
 import {
   compileForbidRegex,
+  compileSurfacePolicy,
   warnReservedContractFields,
   warnReservedPolicyFields,
 } from "./policy-compiler.mjs";
@@ -22,6 +23,7 @@ import {
   checkNewFilesBudget,
   checkNetAddedLinesBudget,
   checkCochangeRules,
+  checkSurfaceMatrix,
   checkContentRules,
   checkMustTouch,
   checkMustNotTouch,
@@ -159,6 +161,15 @@ export function runCheckPR(roots, args = []) {
     }
   }
 
+  const surfaceErrors = compileSurfacePolicy(policy);
+  if (surfaceErrors.length > 0) {
+    ok = false;
+    console.error("FAIL: surface policy compilation");
+    for (const e of surfaceErrors) {
+      console.error(`  ${e.message}`);
+    }
+  }
+
   for (const w of warnReservedPolicyFields(policy)) {
     console.warn(`WARN: ${w}`);
   }
@@ -237,6 +248,19 @@ export function runCheckPR(roots, args = []) {
   reporter.report("canonical-docs-budget", checkCanonicalDocsBudget(files, policy.paths.canonical_docs, maxNewDocs));
   reporter.report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
   reporter.report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
+
+  if (policy.surface_matrix) {
+    reporter.report(
+      "surface-matrix",
+      checkSurfaceMatrix(
+        files,
+        policy.surfaces,
+        policy.surface_matrix,
+        contract?.change_class || null,
+        { allow_unclassified_files: policy.allow_unclassified_files }
+      )
+    );
+  }
 
   const cochangeViolations = checkCochangeRules(files, policy.cochange_rules);
   if (cochangeViolations.length > 0) {

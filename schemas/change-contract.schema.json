@@ -17,6 +17,11 @@
       "type": "string",
       "enum": ["feature", "bugfix", "refactor", "docs", "chore"]
     },
+    "change_class": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional named policy change class used by surface_matrix enforcement."
+    },
     "scope": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },

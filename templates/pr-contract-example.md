@@ -5,6 +5,7 @@ validate the proposed changes against the repository policy:
 
 ```repo-guard-yaml
 change_type: bugfix
+change_class: kernel-hardening
 scope:
   - src/pagination.mjs
 budgets:

@@ -1,5 +1,6 @@
 {
   "change_type": "feature",
+  "change_class": "kernel-hardening",
   "scope": ["src/**"],
   "budgets": {
     "max_new_files": 3,

@@ -15,6 +15,28 @@
     "max_new_files": 20,
     "max_net_added_lines": 500
   },
+  "surfaces": {
+    "kernel": ["include/**", "src/**"],
+    "tests": ["tests/**"],
+    "docs": ["docs/**", "README.md"],
+    "generated": ["single_include/**"]
+  },
+  "change_classes": ["kernel-hardening", "docs-cleanup", "generated-refresh"],
+  "allow_unclassified_files": false,
+  "surface_matrix": {
+    "kernel-hardening": {
+      "allow": ["kernel", "tests"],
+      "forbid": ["generated"]
+    },
+    "docs-cleanup": {
+      "allow": ["docs"],
+      "forbid": ["kernel", "tests", "generated"]
+    },
+    "generated-refresh": {
+      "allow": ["generated"],
+      "forbid": ["kernel", "docs", "tests"]
+    }
+  },
   "content_rules": [
     {
       "id": "forbid_doxygen_tags_in_headers",

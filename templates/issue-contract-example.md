@@ -5,6 +5,7 @@ as a YAML code block so `repo-guard` can validate it:
 
 ```repo-guard-yaml
 change_type: feature
+change_class: kernel-hardening
 scope:
   - src/auth.mjs
   - src/middleware/**
