@@ -65,6 +65,30 @@ function makePolicy(enforcementMode) {
   return policy;
 }
 
+function makeRegistryPolicy(enforcementMode) {
+  const policy = makePolicy(enforcementMode);
+  policy.paths.canonical_docs = ["README.md", "docs/policy.md"];
+  policy.diff_rules.max_new_files = 5;
+  policy.registry_rules = [
+    {
+      id: "canonical-docs-sync",
+      kind: "set_equality",
+      left: {
+        type: "json_array",
+        file: "repo-policy.json",
+        json_pointer: "/paths/canonical_docs",
+      },
+      right: {
+        type: "markdown_section_links",
+        file: "docs/index.md",
+        section: "Canonical Documents",
+        prefix: "docs/",
+      },
+    },
+  ];
+  return policy;
+}
+
 function makeRepo(enforcementMode) {
   const dir = mkdtempSync(join(tmpdir(), "repo-guard-enforcement-"));
   execSync("git init", { cwd: dir, stdio: "pipe" });
@@ -77,6 +101,36 @@ function makeRepo(enforcementMode) {
 
   writeFileSync(join(dir, "new-file.txt"), "new\n");
   execSync("git add -A && git commit -m add-file", { cwd: dir, stdio: "pipe" });
+
+  return {
+    dir,
+    base: execSync("git rev-parse HEAD~1", { cwd: dir, encoding: "utf-8" }).trim(),
+    head: execSync("git rev-parse HEAD", { cwd: dir, encoding: "utf-8" }).trim(),
+  };
+}
+
+function makeRegistryPrRepo(enforcementMode) {
+  const dir = mkdtempSync(join(tmpdir(), "repo-guard-registry-pr-"));
+  execSync("git init", { cwd: dir, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd: dir, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: dir, stdio: "pipe" });
+
+  writeFileSync(join(dir, "repo-policy.json"), JSON.stringify(makeRegistryPolicy(enforcementMode), null, 2));
+  writeFileSync(join(dir, "README.md"), "# Test\n");
+  execSync("mkdir -p docs", { cwd: dir, stdio: "pipe" });
+  writeFileSync(join(dir, "docs", "policy.md"), "# Policy\n");
+  writeFileSync(join(dir, "docs", "index.md"), [
+    "# Docs",
+    "",
+    "## Canonical Documents",
+    "",
+    "- [Readme](../README.md)",
+    "- [Architecture](architecture.md)",
+  ].join("\n"));
+  execSync("git add -A && git commit -m init", { cwd: dir, stdio: "pipe" });
+
+  writeFileSync(join(dir, "README.md"), "# Test\n\nChange.\n");
+  execSync("git add -A && git commit -m change", { cwd: dir, stdio: "pipe" });
 
   return {
     dir,
@@ -198,6 +252,46 @@ console.log("\n--- check-pr missing contract is advisory when requested ---");
   expect("check-pr advisory missing contract exit code", result.code, 0);
   expectIncludes("check-pr missing contract warning", result.output, "WARN: change-contract");
   expectIncludes("check-pr advisory summary", result.output, "advisory violation");
+
+  rmSync(repo.dir, { recursive: true });
+}
+
+console.log("\n--- check-pr enforces registry_rules ---");
+{
+  const repo = makeRegistryPrRepo();
+  const eventPath = join(repo.dir, "event.json");
+  writeFileSync(eventPath, JSON.stringify({
+    pull_request: {
+      number: 124,
+      base: { sha: repo.base },
+      head: { sha: repo.head },
+      body: `
+\`\`\`repo-guard-json
+{
+  "change_type": "docs",
+  "scope": ["README.md"],
+  "budgets": {"max_new_files": 5},
+  "must_touch": [],
+  "must_not_touch": [],
+  "expected_effects": ["Docs updated"]
+}
+\`\`\`
+`,
+    },
+    repository: { full_name: "owner/repo" },
+  }));
+
+  const result = runGuard([
+    "--repo-root", repo.dir,
+    "check-pr",
+  ], {
+    env: { GITHUB_EVENT_PATH: eventPath },
+  });
+
+  expect("check-pr registry mismatch exit code", result.code, 1);
+  expectIncludes("check-pr registry mismatch reports failure", result.output, "FAIL: registry-rules");
+  expectIncludes("check-pr registry mismatch names rule", result.output, "failed_rules: canonical-docs-sync");
+  expectIncludes("check-pr registry mismatch details missing entry", result.output, "missing from right: docs/policy.md");
 
   rmSync(repo.dir, { recursive: true });
 }
