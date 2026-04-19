@@ -28,6 +28,11 @@ function expectIncludes(label, str, substring) {
   }
 }
 
+function expectTopLevelKeys(label, actual, expected) {
+  const keys = Object.keys(actual || {}).sort();
+  expect(label, JSON.stringify(keys), JSON.stringify([...expected].sort()));
+}
+
 function runGuard(args, opts = {}) {
   const result = spawnSync(process.execPath, [repoGuard, ...args], {
     cwd: opts.cwd || projectRoot,
@@ -383,6 +388,22 @@ console.log("\n--- check-diff --format json emits stable machine-readable result
   expect("ok is false", parsed?.ok, false);
   expect("exitCode is 1", parsed?.exitCode, 1);
   expect("changed file count", parsed?.diff?.changedFiles, 2);
+  expectTopLevelKeys("top-level json shape is stable", parsed, [
+    "advisoryWarnings",
+    "diff",
+    "exitCode",
+    "failed",
+    "hints",
+    "mode",
+    "ok",
+    "passed",
+    "repositoryRoot",
+    "result",
+    "ruleResults",
+    "violationCount",
+    "violations",
+    "warnings",
+  ]);
   expect("result array is stable", Array.isArray(parsed?.ruleResults), true);
   expect("violations array is stable", Array.isArray(parsed?.violations), true);
   expect("hints array is stable", Array.isArray(parsed?.hints), true);

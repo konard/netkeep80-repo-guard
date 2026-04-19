@@ -5,45 +5,13 @@ import { execSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv from "ajv";
+import { compileForbidRegex, warnReservedContractFields, warnReservedPolicyFields } from "./policy-compiler.mjs";
 import {
-  parseDiff,
-  filterOperationalPaths,
-  checkForbiddenPaths,
-  checkCanonicalDocsBudget,
-  checkNewFilesBudget,
-  checkNetAddedLinesBudget,
-  checkSurfaceDebt,
-  checkCochangeRules,
-  checkNewFileRules,
-  checkSurfaceMatrix,
-  checkContentRules,
-  checkMustTouch,
-  checkMustNotTouch,
-  checkChangeTypeRules,
-  checkRegistryRules,
-  checkAdvisoryTextRules,
-} from "./diff-checker.mjs";
-import {
-  compileForbidRegex,
-  compileNewFilePolicy,
-  compileChangeTypePolicy,
-  compileSurfacePolicy,
-  warnReservedContractFields,
-  warnReservedPolicyFields,
-} from "./policy-compiler.mjs";
-
-function listTrackedFiles(repoRoot) {
-  return execSync("git ls-files", { encoding: "utf-8", cwd: repoRoot })
-    .split(/\r?\n/)
-    .filter(Boolean);
-}
-import {
-  ajvErrors,
-  createCheckReporter,
-  printEnforcementMode,
-  renderCheckSummary,
   resolveEnforcementMode,
 } from "./enforcement.mjs";
+import { renderCheckSummary } from "./reporting/renderers.mjs";
+import { loadJSON, loadPolicyRuntime, validate, validationCheck } from "./runtime/validation.mjs";
+import { runPolicyPipeline } from "./runtime/pipeline.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
@@ -76,37 +44,6 @@ export function resolveRoots(args) {
   return { packageRoot, repoRoot, enforcementMode, args: filtered };
 }
 
-function loadJSON(path) {
-  return JSON.parse(readFileSync(path, "utf-8"));
-}
-
-function validate(ajv, schema, data, label, options = {}) {
-  const valid = ajv.validate(schema, data);
-  if (!valid) {
-    if (!options.quiet) {
-      console.error(`FAIL: ${label}`);
-      for (const err of ajv.errors) {
-        console.error(`  ${err.instancePath || "/"} ${err.message}`);
-      }
-    }
-    return false;
-  }
-  if (!options.quiet) console.log(`OK: ${label}`);
-  return true;
-}
-
-function validationCheck(ajv, schema, data, label) {
-  const valid = ajv.validate(schema, data);
-  if (valid) {
-    return { ok: true };
-  }
-  return {
-    ok: false,
-    message: `${label} failed schema validation`,
-    errors: ajvErrors(ajv.errors),
-  };
-}
-
 function getDiff(base, head, cwd) {
   if (base && head) {
     return execSync(`git diff ${base}...${head}`, { encoding: "utf-8", cwd });
@@ -117,10 +54,6 @@ function getDiff(base, head, cwd) {
 }
 
 function runCheckDiff(roots, args) {
-  const policySchemaPath = resolve(roots.packageRoot, "schemas/repo-policy.schema.json");
-  const contractSchemaPath = resolve(roots.packageRoot, "schemas/change-contract.schema.json");
-  const policyPath = resolve(roots.repoRoot, "repo-policy.json");
-
   let base = null;
   let head = null;
   let contractPath = null;
@@ -159,66 +92,10 @@ function runCheckDiff(roots, args) {
 
   const quiet = format === "json";
 
-  const policySchema = loadJSON(policySchemaPath);
-  const contractSchema = loadJSON(contractSchemaPath);
-  const policy = loadJSON(policyPath);
+  const runtime = loadPolicyRuntime(roots, { quiet });
+  const { ajv, policy, contractSchema } = runtime;
 
-  const ajv = new Ajv({ allErrors: true });
-
-  let ok = true;
-  ok = validate(ajv, policySchema, policy, "repo-policy.json", { quiet }) && ok;
-
-  const regexErrors = compileForbidRegex(policy.content_rules);
-  if (regexErrors.length > 0) {
-    ok = false;
-    if (!quiet) {
-      console.error("FAIL: forbid_regex compilation");
-      for (const e of regexErrors) {
-        console.error(`  [${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`);
-      }
-    }
-  }
-
-  const surfaceErrors = compileSurfacePolicy(policy);
-  if (surfaceErrors.length > 0) {
-    ok = false;
-    if (!quiet) {
-      console.error("FAIL: surface policy compilation");
-      for (const e of surfaceErrors) {
-        console.error(`  ${e.message}`);
-      }
-    }
-  }
-
-  const newFileErrors = compileNewFilePolicy(policy);
-  if (newFileErrors.length > 0) {
-    ok = false;
-    if (!quiet) {
-      console.error("FAIL: new file policy compilation");
-      for (const e of newFileErrors) {
-        console.error(`  ${e.message}`);
-      }
-    }
-  }
-
-  const changeTypeErrors = compileChangeTypePolicy(policy);
-  if (changeTypeErrors.length > 0) {
-    ok = false;
-    if (!quiet) {
-      console.error("FAIL: change type policy compilation");
-      for (const e of changeTypeErrors) {
-        console.error(`  ${e.message}`);
-      }
-    }
-  }
-
-  if (!quiet) {
-    for (const w of warnReservedPolicyFields(policy)) {
-      console.warn(`WARN: ${w}`);
-    }
-  }
-
-  if (!ok) {
+  if (!runtime.ok) {
     if (!quiet) console.error("\nPolicy compilation failed; aborting enforcement.");
     process.exit(1);
   }
@@ -228,15 +105,14 @@ function runCheckDiff(roots, args) {
     console.error(`ERROR: ${enforcement.message}`);
     process.exit(1);
   }
-  if (!quiet) printEnforcementMode(enforcement);
-  const reporter = createCheckReporter(enforcement.mode, { quiet });
 
   let contract = null;
+  const initialChecks = [];
   if (contractPath) {
     try {
       const loadedContract = loadJSON(contractPath);
       const contractCheck = validationCheck(ajv, contractSchema, loadedContract, contractPath);
-      reporter.report("change-contract", contractCheck);
+      initialChecks.push({ name: "change-contract", check: contractCheck });
       if (contractCheck.ok) {
         contract = loadedContract;
         if (!quiet) {
@@ -246,104 +122,29 @@ function runCheckDiff(roots, args) {
         }
       }
     } catch (e) {
-      reporter.report("change-contract", {
-        ok: false,
-        message: `Cannot read ${contractPath}: ${e.message}`,
+      initialChecks.push({
+        name: "change-contract",
+        check: {
+          ok: false,
+          message: `Cannot read ${contractPath}: ${e.message}`,
+        },
       });
     }
   }
 
   const diffText = getDiff(base, head, roots.repoRoot);
-  const allFiles = parseDiff(diffText);
-  const files = filterOperationalPaths(allFiles, policy.paths.operational_paths);
-
-  const skipped = allFiles.length - files.length;
-  if (!quiet) console.log(`\nDiff analysis: ${allFiles.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
-
-  const forbiddenViolations = checkForbiddenPaths(files, policy.paths.forbidden);
-  reporter.report("forbidden-paths", {
-    ok: forbiddenViolations.length === 0,
-    files: forbiddenViolations,
-  });
-
-  const budgets = contract?.budgets || {};
-  const maxNewDocs = budgets.max_new_docs ?? policy.diff_rules.max_new_docs;
-  const maxNewFiles = budgets.max_new_files ?? policy.diff_rules.max_new_files;
-  const maxNetAddedLines = budgets.max_net_added_lines ?? policy.diff_rules.max_net_added_lines;
-
-  reporter.report("canonical-docs-budget", checkCanonicalDocsBudget(files, policy.paths.canonical_docs, maxNewDocs));
-  reporter.report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
-  reporter.report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
-  reporter.report("surface-debt", checkSurfaceDebt(files, contract?.surface_debt));
-  reporter.report("registry-rules", checkRegistryRules(policy.registry_rules, { repoRoot: roots.repoRoot }));
-  reporter.report(
-    "advisory-text-rules",
-    checkAdvisoryTextRules(files, policy.advisory_text_rules, {
-      repoRoot: roots.repoRoot,
-      allFiles: listTrackedFiles(roots.repoRoot),
-    })
-  );
-
-  if (policy.change_type_rules) {
-    reporter.report("change-type-rules", checkChangeTypeRules(files, policy, contract?.change_type));
-  }
-
   const declaredChangeClass = cliChangeClass || contract?.change_class || null;
-  if (policy.new_file_rules) {
-    reporter.report(
-      "new-file-rules",
-      checkNewFileRules(files, policy.new_file_classes, policy.new_file_rules, declaredChangeClass)
-    );
-  }
 
-  if (policy.surface_matrix) {
-    reporter.report(
-      "surface-matrix",
-      checkSurfaceMatrix(
-        files,
-        policy.surfaces,
-        policy.surface_matrix,
-        declaredChangeClass,
-        { allow_unclassified_files: policy.allow_unclassified_files }
-      )
-    );
-  }
-
-  const cochangeViolations = checkCochangeRules(files, policy.cochange_rules);
-  if (cochangeViolations.length > 0) {
-    for (const v of cochangeViolations) {
-      reporter.report(`cochange: ${v.if_changed.join(",")} -> ${v.must_change_any.join(",")}`, {
-        ok: false,
-        must_touch: v.must_change_any,
-      });
-    }
-  } else {
-    reporter.report("cochange-rules", { ok: true });
-  }
-
-  const contentViolations = checkContentRules(files, policy.content_rules);
-  if (contentViolations.length > 0) {
-    reporter.report("content-rules", {
-      ok: false,
-      details: contentViolations.map((v) => `[${v.rule_id}] ${v.file}: "${v.line}" matched /${v.matched_regex}/`),
-    });
-  } else {
-    reporter.report("content-rules", { ok: true });
-  }
-
-  if (contract) {
-    reporter.report("must-touch", checkMustTouch(files, contract.must_touch));
-    reporter.report("must-not-touch", checkMustNotTouch(files, contract.must_not_touch));
-  }
-
-  const summary = reporter.finish({
+  const summary = runPolicyPipeline({
     repositoryRoot: roots.repoRoot,
-    diff: {
-      changedFiles: allFiles.length,
-      checkedFiles: files.length,
-      skippedOperationalFiles: skipped,
-    },
-  });
+    policy,
+    contract,
+    enforcement,
+    diffText,
+    declaredChangeClass,
+    initialChecks,
+  }, { quiet });
+
   if (format === "json") {
     console.log(JSON.stringify(summary, null, 2));
   } else if (format === "summary") {
