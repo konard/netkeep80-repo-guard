@@ -41,6 +41,9 @@ jobs:
       - name: Run hardening tests
         run: npm run test:hardening
 
+      - name: Run anchor extraction tests
+        run: npm run test:anchors
+
       - name: Run repo-root separation tests
         run: npm run test:repo-root
 

@@ -14,6 +14,7 @@ import {
   checkRegistryRules,
   checkAdvisoryTextRules,
 } from "../diff-checker.mjs";
+import { checkAnchorExtraction } from "../extractors/anchors.mjs";
 
 export function runPolicyChecks(facts, reporter) {
   const policy = facts.policy;
@@ -49,6 +50,9 @@ export function runPolicyChecks(facts, reporter) {
       allFiles: facts.trackedFiles,
     })
   );
+  if (policy.anchors) {
+    reporter.report("anchor-extraction", checkAnchorExtraction(facts.anchors));
+  }
 
   if (policy.change_type_rules) {
     reporter.report("change-type-rules", checkChangeTypeRules(files, policy, contract?.change_type));

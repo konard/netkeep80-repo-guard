@@ -5,6 +5,7 @@ import {
   detectTouchedSurfaces,
   classifyNewFiles,
 } from "../diff-checker.mjs";
+import { extractAnchors } from "../extractors/anchors.mjs";
 
 export function listTrackedFiles(repoRoot) {
   return execSync("git ls-files", { encoding: "utf-8", cwd: repoRoot })
@@ -23,6 +24,7 @@ export function buildPolicyFacts({
   trackedFiles = null,
   declaredChangeClass = null,
   diagnostics = {},
+  readFile = null,
 }) {
   const allFiles = parseDiff(diffText);
   const checkedFiles = filterOperationalPaths(allFiles, policy.paths.operational_paths);
@@ -35,6 +37,12 @@ export function buildPolicyFacts({
   const newFileClasses = policy.new_file_classes
     ? classifyNewFiles(checkedFiles, policy.new_file_classes)
     : null;
+  const anchors = extractAnchors(policy, {
+    repoRoot: repositoryRoot,
+    trackedFiles: resolvedTrackedFiles,
+    changedFiles: checkedFiles,
+    readFile,
+  });
 
   return {
     mode,
@@ -51,6 +59,7 @@ export function buildPolicyFacts({
         skippedOperational: skippedOperationalFiles,
       },
     },
+    anchors,
     trackedFiles: resolvedTrackedFiles,
     derived: {
       changedPaths,

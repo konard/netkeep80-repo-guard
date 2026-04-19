@@ -272,7 +272,7 @@
     },
     "anchors": {
       "type": "object",
-      "description": "Named anchor types and extractors used as shared trace vocabulary. Runtime extraction is reserved for future versions.",
+      "description": "Named anchor types and extractors used as shared trace vocabulary. Runtime extraction records normalized anchor facts; trace enforcement is reserved for future versions.",
       "required": ["types"],
       "additionalProperties": false,
       "properties": {

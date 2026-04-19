@@ -57,6 +57,7 @@ Policy engine для репозитория: формализует правил
 | New file rules | Проверяет классы новых файлов и per-class бюджеты для объявленного `change_class` |
 | Co-change rules | Если изменён X, должен быть изменён и Y |
 | Surface matrix | Проверяет, что объявленный `change_class` трогает только разрешённые surface-классы |
+| Anchor extraction | Извлекает anchor facts из настроенных `regex` и `json_field` sources |
 | Content rules | Запрещает regex-паттерны в добавленных строках |
 | must_touch | Хотя бы один из указанных паттернов должен совпасть с изменённым файлом (из contract) |
 | must_not_touch | Ни один из указанных паттернов не должен совпасть с изменённым файлом (из contract) |
@@ -527,6 +528,33 @@ Summary: 9 passed, 0 failed (mode: blocking; violations enforced)
 Result: passed (mode: blocking; exit code 0)
 ```
 
+### Anchor Extraction
+
+`anchors` в `repo-policy.json` задают типы якорей и источники, из которых repo-guard строит нормализованные facts перед проверками. Runtime v1 поддерживает два extractor kind:
+
+```json
+{
+  "anchors": {
+    "types": {
+      "requirement_id": {
+        "sources": [
+          { "kind": "json_field", "glob": "requirements/**/*.json", "field": "id" }
+        ]
+      },
+      "code_req_ref": {
+        "sources": [
+          { "kind": "regex", "glob": "src/**", "pattern": "@req\\s+((FR|SR)-[0-9]{3})" }
+        ]
+      }
+    }
+  }
+}
+```
+
+`json_field` читает top-level JSON field и нормализует scalar value в строку. `regex` сканирует matching files и, если pattern содержит capture group, берёт value из первого matched group; без capture group value равен полной matched строке. Каждый instance содержит `anchorType`, `value`, `file`, `sourceKind`, а regex instances также получают `line`, `column`, `captureGroup` и `raw`.
+
+Anchor extraction работает по tracked repository files и по changed files из diff, чтобы global requirement IDs и новые references были доступны в одной facts model. Если JSON не парсится, field отсутствует или source file не читается, check `anchor-extraction` завершается `FAIL` с диагностикой вида `[requirement_id json_field source 0] requirements/fr-001.json: field "id" not found`.
+
 ### 4. Пример failure
 
 Если в PR затронут файл `schemas/repo-policy.schema.json`, который указан в `must_not_touch`:
@@ -978,7 +1006,7 @@ The self-hosted governance surface is declared in `repo-policy.json` under `path
 
 - `governance_paths` — информационное поле, не проверяется в runtime. Документирует, какие файлы управляют governance.
 - `public_api` — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
-- `anchors` (в change contract) — декларативный intent на уровне anchors. Принимается схемой, но runtime extraction/enforcement для anchors зарезервирован для будущих версий.
+- `anchors` (в change contract) — декларативный intent на уровне anchors. Принимается схемой, но runtime trace enforcement для anchors зарезервирован для будущих версий.
 - `overrides` (в change contract) — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
 - `repo-guard` пока не публикует комментарии к PR.
 - Паттерны `forbid_regex` компилируются и проверяются до начала enforcement — ошибки в regex выявляются на этапе загрузки policy.
