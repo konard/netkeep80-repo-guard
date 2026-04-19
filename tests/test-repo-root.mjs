@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
@@ -69,6 +69,28 @@ function expect(label, actual, expected) {
   } catch (e) {
     expect("self-hosted validate passes", false, true);
   }
+}
+
+// --- installed bin symlink: validate still runs the CLI entrypoint ---
+
+{
+  const tmp = mkdtempSync(join(tmpdir(), "rg-bin-symlink-"));
+  const binDir = join(tmp, "node_modules", ".bin");
+  mkdirSync(binDir, { recursive: true });
+  const binPath = join(binDir, "repo-guard");
+  symlinkSync(resolve(projectRoot, "src/repo-guard.mjs"), binPath);
+
+  try {
+    const output = execSync(
+      `node ${binPath} --repo-root ${projectRoot}`,
+      { encoding: "utf-8", cwd: tmp }
+    );
+    expect("installed bin symlink validates policy", output.includes("OK: repo-policy.json"), true);
+  } catch (e) {
+    expect("installed bin symlink validates policy", false, true);
+  }
+
+  rmSync(tmp, { recursive: true });
 }
 
 // --- explicit --repo-root: validate loads policy from target repo ---

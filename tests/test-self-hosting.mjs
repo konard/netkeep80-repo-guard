@@ -88,7 +88,8 @@ describe("repo-guard self-hosting templates and docs", () => {
   it("README documents what self-hosted paths are governed and why", () => {
     const readme = readProjectFile("README.md");
 
-    assert.match(readme, /## Self-hosting/);
+    assert.match(readme, /## Самопроверка репозитория/);
+    assert.match(readme, /управляющие пути/);
     assert.match(readme, /\.github\/workflows\//);
     assert.match(readme, /action\.yml/);
     assert.match(readme, /repo-policy\.json/);
