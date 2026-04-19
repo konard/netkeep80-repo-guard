@@ -44,6 +44,9 @@ jobs:
       - name: Run anchor extraction tests
         run: npm run test:anchors
 
+      - name: Run trace evidence rule tests
+        run: npm run test:trace-evidence
+
       - name: Run repo-root separation tests
         run: npm run test:repo-root
 

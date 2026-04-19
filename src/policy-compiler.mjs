@@ -198,11 +198,12 @@ export function compileAnchorPolicy(policy) {
   const anchorTypes = anchors?.types || {};
   const anchorTypeNames = new Set(Object.keys(anchorTypes));
   const traceRuleIds = new Set();
+  const contractAnchorFields = new Set(["anchors.affects", "anchors.implements", "anchors.verifies"]);
 
   if (!anchors && traceRules.length === 0) return errors;
 
-  if (traceRules.length > 0 && anchorTypeNames.size === 0) {
-    errors.push({ message: "trace_rules requires anchor types in anchors.types" });
+  if (traceRules.some((rule) => rule.kind === "must_resolve") && anchorTypeNames.size === 0) {
+    errors.push({ message: "trace_rules.kind = \"must_resolve\" requires anchor types in anchors.types" });
   }
 
   for (const [anchorType, config] of Object.entries(anchorTypes)) {
@@ -231,13 +232,23 @@ export function compileAnchorPolicy(policy) {
     }
     traceRuleIds.add(rule.id);
 
-    for (const field of ["from_anchor_type", "to_anchor_type"]) {
-      const anchorType = rule[field];
-      if (!anchorTypeNames.has(anchorType)) {
+    if (rule.kind === "must_resolve") {
+      for (const field of ["from_anchor_type", "to_anchor_type"]) {
+        const anchorType = rule[field];
+        if (!anchorTypeNames.has(anchorType)) {
+          errors.push({
+            trace_rule: rule.id,
+            anchor_type: anchorType,
+            message: `trace_rules[${index}].${field} references unknown anchor type "${anchorType}"`,
+          });
+        }
+      }
+    } else if (rule.kind === "declared_anchors_require_evidence") {
+      if (!contractAnchorFields.has(rule.contract_field)) {
         errors.push({
           trace_rule: rule.id,
-          anchor_type: anchorType,
-          message: `trace_rules[${index}].${field} references unknown anchor type "${anchorType}"`,
+          contract_field: rule.contract_field,
+          message: `trace_rules[${index}].contract_field must be one of ${[...contractAnchorFields].join(", ")}`,
         });
       }
     }

@@ -345,6 +345,10 @@ make `ok: false` and `result: "failed"`. In `blocking` mode they exit `1`; in
 Structured violations include `unresolved_anchors` with the offending anchor
 value, source instances, and file/line/column locations. Their rule names use
 the `trace-rule: <id>` form, for example `trace-rule: code-refs-must-resolve`.
+Evidence trace rules use the same `trace-rule: <id>` violation shape but report
+`trace_kind`, `must_touch_any`, `changed_files`, `evidence_files`, and, for
+contract anchor declarations, `contract_field` plus `declared_anchors`; this
+keeps missing evidence diagnostics distinct from missing anchor resolution.
 
 Exit behavior follows the active enforcement mode: in `blocking` mode
 violations exit `1`; in `advisory` mode violations are reported but the command
@@ -664,6 +668,37 @@ Anchor extraction работает по tracked repository files и по changed
 наличие matching value среди to-anchor instances. Unresolved references также
 становятся policy violations вида `trace-rule: <id>` и наследуют обычную
 семантику `blocking`/`advisory`.
+
+Evidence rules добавляют второй класс `trace_rules`, который не требует anchor
+extractors:
+
+```json
+{
+  "trace_rules": [
+    {
+      "id": "changed-requirements-need-evidence",
+      "kind": "changed_files_require_evidence",
+      "if_changed": ["requirements/**"],
+      "must_touch_any": ["src/**", "tests/**", "docs/**"]
+    },
+    {
+      "id": "declared-anchors-need-evidence",
+      "kind": "declared_anchors_require_evidence",
+      "contract_field": "anchors.affects",
+      "must_touch_any": ["src/**", "tests/**", "docs/**"]
+    }
+  ]
+}
+```
+
+`changed_files_require_evidence` срабатывает, когда diff затрагивает хотя бы
+один путь из `if_changed`, и требует хотя бы один changed file из
+`must_touch_any`. `declared_anchors_require_evidence` срабатывает, когда change
+contract объявляет values в `anchors.affects`, `anchors.implements` или
+`anchors.verifies`, и требует такой же evidence surface в diff. Missing evidence
+становится policy violation с `trace_kind`, отличным от `must_resolve`, чтобы
+потребители structured output могли различать нерешённые anchors и отсутствие
+причинно-следственного следа в diff.
 
 ### 4. Пример failure
 
@@ -1116,8 +1151,9 @@ The self-hosted governance surface is declared in `repo-policy.json` under `path
 
 - `governance_paths` — информационное поле, не проверяется в runtime. Документирует, какие файлы управляют governance.
 - `public_api` — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
-- `anchors` (в change contract) — декларативный intent на уровне anchors. Принимается схемой и выводится в structured output как `anchors.declaredByContract`; сами contract anchors не являются отдельным enforcement rule.
+- `anchors` (в change contract) — декларативный intent на уровне anchors. Принимается схемой и выводится в structured output как `anchors.declaredByContract`; evidence trace rules can enforce that declared contract anchors are backed by changed evidence surfaces.
 - `trace_rules.kind = "must_resolve"` — enforced runtime rule: unresolved from-anchor values must resolve to at least one matching to-anchor value and are reported in `traceRuleResults`, `anchors.unresolved`, and structured violations.
+- `trace_rules.kind = "changed_files_require_evidence"` and `trace_rules.kind = "declared_anchors_require_evidence"` — enforced runtime evidence rules: changed requirement artifacts or declared contract anchors must be accompanied by at least one changed file in a configured evidence surface.
 - `overrides` (в change contract) — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
 - `repo-guard` пока не публикует комментарии к PR.
 - Паттерны `forbid_regex` компилируются и проверяются до начала enforcement — ошибки в regex выявляются на этапе загрузки policy.
