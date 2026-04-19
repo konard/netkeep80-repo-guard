@@ -81,6 +81,28 @@
         }
       }
     },
+    "anchors": {
+      "type": "object",
+      "description": "Optional declared anchor intent for the change. Accepted as contract metadata; runtime enforcement is reserved for future versions.",
+      "additionalProperties": false,
+      "properties": {
+        "affects": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "implements": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "verifies": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
     "must_touch": {
       "type": "array",
       "items": { "type": "string" },

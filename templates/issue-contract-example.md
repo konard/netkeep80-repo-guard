@@ -19,6 +19,13 @@ surface_debt:
     max_new_files: 1
     max_net_added_lines: 80
   repayment_issue: 456
+anchors:
+  affects:
+    - FR-014
+  implements:
+    - FR-014
+  verifies:
+    - FR-014
 must_touch:
   - src/auth.mjs
 must_not_touch:

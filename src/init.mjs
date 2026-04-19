@@ -104,6 +104,13 @@ change_class: kernel-hardening
 scope:
   - src/
 budgets: {}
+anchors:
+  affects:
+    - FR-014
+  implements:
+    - FR-014
+  verifies:
+    - FR-014
 must_touch: []
 must_not_touch: []
 expected_effects:
@@ -140,6 +147,13 @@ body:
         scope:
           - src/
         budgets: {}
+        anchors:
+          affects:
+            - FR-014
+          implements:
+            - FR-014
+          verifies:
+            - FR-014
         must_touch: []
         must_not_touch: []
         expected_effects:

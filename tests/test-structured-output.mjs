@@ -523,6 +523,49 @@ console.log("\n--- check-diff reports surface debt status in JSON output ---");
   rmSync(repo.dir, { recursive: true });
 }
 
+console.log("\n--- check-diff reports anchor contract schema errors in JSON output ---");
+{
+  const contract = {
+    change_type: "feature",
+    scope: ["src/**"],
+    budgets: {},
+    anchors: {
+      affects: ["FR-014", "FR-014"],
+    },
+    must_touch: [],
+    must_not_touch: [],
+    expected_effects: ["Anchor intent should be unique"],
+  };
+  const repo = makeSurfaceDebtRepo(contract);
+  const result = runGuard([
+    "--repo-root", repo.dir,
+    "check-diff",
+    "--format", "json",
+    "--base", repo.base,
+    "--head", repo.head,
+    "--contract", repo.contractPath,
+  ]);
+
+  expect("malformed anchor contract exit code", result.code, 1);
+  let parsed = null;
+  try {
+    parsed = JSON.parse(result.stdout);
+    expect("malformed anchor contract stdout is valid json", true, true);
+  } catch (e) {
+    expect("malformed anchor contract stdout is valid json", e.message, "valid json");
+  }
+  const contractViolation = parsed?.violations.find((v) => v.rule === "change-contract");
+  expect("anchor contract violation is present", Boolean(contractViolation), true);
+  expect("anchor contract error points to anchors",
+    contractViolation?.errors.some((error) => error.includes("/anchors/affects")),
+    true);
+  expect("anchor contract error reports duplicate items",
+    contractViolation?.errors.some((error) => error.includes("duplicate")),
+    true);
+
+  rmSync(repo.dir, { recursive: true });
+}
+
 console.log("\n--- check-diff evaluates registry_rules in JSON output ---");
 {
   const repo = makeRegistryRepo();

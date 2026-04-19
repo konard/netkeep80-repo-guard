@@ -477,6 +477,13 @@ surface_debt:
     max_new_files: 1
     max_net_added_lines: 60
   repayment_issue: 123
+anchors:
+  affects:
+    - FR-014
+  implements:
+    - FR-014
+  verifies:
+    - FR-014
 must_touch:
   - src/pagination.mjs
 must_not_touch:
@@ -487,7 +494,7 @@ expected_effects:
 ```
 ````
 
-Contract говорит: это bugfix, который должен затронуть `src/pagination.mjs`, не должен трогать схемы и policy, и не должен создавать новых файлов. Если diff всё же временно увеличивает поверхность репозитория, `surface_debt` фиксирует причину, ожидаемый рост и issue, где долг будет погашен.
+Contract говорит: это bugfix, который должен затронуть `src/pagination.mjs`, не должен трогать схемы и policy, и не должен создавать новых файлов. Опциональный `anchors` фиксирует intent на уровне требований или других якорей: какие anchors изменение affects, implements и verifies. Если diff всё же временно увеличивает поверхность репозитория, `surface_debt` фиксирует причину, ожидаемый рост и issue, где долг будет погашен.
 
 `surface_debt` проверяется только когда contract явно его объявляет. Проверка сравнивает declaration с фактическим ростом diff: количеством новых файлов и `added - deleted` строк. Если рост есть, но `surface_debt` не объявлен, repo-guard сообщает не блокирующий статус `undeclared`; если фактический рост больше `expected_delta`, статус будет `declared_debt_exceeded`; если нет `repayment_issue`, статус будет `missing_repayment_target`.
 
@@ -971,6 +978,7 @@ The self-hosted governance surface is declared in `repo-policy.json` under `path
 
 - `governance_paths` — информационное поле, не проверяется в runtime. Документирует, какие файлы управляют governance.
 - `public_api` — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
+- `anchors` (в change contract) — декларативный intent на уровне anchors. Принимается схемой, но runtime extraction/enforcement для anchors зарезервирован для будущих версий.
 - `overrides` (в change contract) — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
 - `repo-guard` пока не публикует комментарии к PR.
 - Паттерны `forbid_regex` компилируются и проверяются до начала enforcement — ошибки в regex выявляются на этапе загрузки policy.

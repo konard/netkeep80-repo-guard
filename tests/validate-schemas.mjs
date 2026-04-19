@@ -109,6 +109,16 @@ expect("new_file_rules without allow_classes fails schema", validatePolicy(missi
 const validContract = loadJSON(resolve(root, "tests/fixtures/valid-contract.json"));
 expect("valid-contract.json passes schema", validateContract(validContract), true);
 
+const contractWithAnchors = {
+  ...validContract,
+  anchors: {
+    affects: ["FR-014"],
+    implements: ["FR-014"],
+    verifies: ["FR-014"],
+  },
+};
+expect("contract with anchor intent passes schema", validateContract(contractWithAnchors), true);
+
 const repositoryTypedContract = {
   ...validContract,
   change_type: "governance",
@@ -117,6 +127,31 @@ expect("repository-specific change_type passes schema", validateContract(reposit
 
 const invalidContract = loadJSON(resolve(root, "tests/fixtures/invalid-contract.json"));
 expect("invalid-contract.json fails schema", validateContract(invalidContract), false);
+
+const malformedAnchorContract = {
+  ...validContract,
+  anchors: {
+    affects: ["FR-014", "FR-014"],
+  },
+};
+expect("contract with duplicate anchor intent fails schema", validateContract(malformedAnchorContract), false);
+
+const unknownAnchorFieldContract = {
+  ...validContract,
+  anchors: {
+    affects: ["FR-014"],
+    notes: ["reserved for a future schema version"],
+  },
+};
+expect("contract with unknown anchor field fails schema", validateContract(unknownAnchorFieldContract), false);
+
+const nonStringAnchorContract = {
+  ...validContract,
+  anchors: {
+    verifies: ["FR-014", 14],
+  },
+};
+expect("contract with non-string anchor intent fails schema", validateContract(nonStringAnchorContract), false);
 
 console.log(`\n${failures === 0 ? "All tests passed" : `${failures} test(s) failed`}`);
 process.exit(failures === 0 ? 0 : 1);

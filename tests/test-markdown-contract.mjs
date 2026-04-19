@@ -57,6 +57,49 @@ Some description here.
 More text after.
 `;
 
+const yamlAnchorsMarkdown = `
+## My PR
+
+\`\`\`repo-guard-yaml
+change_type: feature
+scope:
+  - src/app.mjs
+budgets: {}
+anchors:
+  affects:
+    - FR-014
+  implements:
+    - FR-014
+  verifies:
+    - FR-014
+must_touch:
+  - src/app.mjs
+must_not_touch: []
+expected_effects:
+  - Implement anchor-aware contracts
+\`\`\`
+`;
+
+const jsonAnchorsMarkdown = `
+## My PR
+
+\`\`\`repo-guard-json
+{
+  "change_type": "feature",
+  "scope": ["src/app.mjs"],
+  "budgets": {},
+  "anchors": {
+    "affects": ["FR-014"],
+    "implements": ["FR-014"],
+    "verifies": ["FR-014"]
+  },
+  "must_touch": ["src/app.mjs"],
+  "must_not_touch": [],
+  "expected_effects": ["Implement anchor-aware contracts"]
+}
+\`\`\`
+`;
+
 {
   const result = extractContract(validMarkdown);
   expect("valid markdown: ok", result.ok, true);
@@ -82,6 +125,22 @@ More text after.
   const result = extractContract(validJsonMarkdown);
   expect("valid JSON markdown remains supported: ok", result.ok, true);
   expect("valid JSON markdown remains supported: change_type", result.contract?.change_type, "bugfix");
+}
+
+{
+  const result = extractContract(yamlAnchorsMarkdown);
+  expect("YAML markdown with anchors remains supported: ok", result.ok, true);
+  expect("YAML markdown with anchors: affects", result.contract?.anchors?.affects?.join(","), "FR-014");
+  expect("YAML markdown with anchors: implements", result.contract?.anchors?.implements?.join(","), "FR-014");
+  expect("YAML markdown with anchors: verifies", result.contract?.anchors?.verifies?.join(","), "FR-014");
+}
+
+{
+  const result = extractContract(jsonAnchorsMarkdown);
+  expect("JSON markdown with anchors remains supported: ok", result.ok, true);
+  expect("JSON markdown with anchors: affects", result.contract?.anchors?.affects?.join(","), "FR-014");
+  expect("JSON markdown with anchors: implements", result.contract?.anchors?.implements?.join(","), "FR-014");
+  expect("JSON markdown with anchors: verifies", result.contract?.anchors?.verifies?.join(","), "FR-014");
 }
 
 {
