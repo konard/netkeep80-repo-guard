@@ -1,6 +1,7 @@
 import { createCheckReporter, printEnforcementMode } from "../enforcement.mjs";
 import { buildPolicyFacts } from "../facts/input.mjs";
 import { runPolicyChecks } from "../checks/orchestrator.mjs";
+import { buildAnchorDiagnostics } from "../reporting/anchor-diagnostics.mjs";
 
 export function runPolicyPipeline(input, options = {}) {
   const quiet = options.quiet || false;
@@ -21,6 +22,7 @@ export function runPolicyPipeline(input, options = {}) {
   }
 
   runPolicyChecks(facts, reporter);
+  const anchorDiagnostics = buildAnchorDiagnostics(facts);
 
   return reporter.finish({
     repositoryRoot: facts.repositoryRoot,
@@ -29,5 +31,6 @@ export function runPolicyPipeline(input, options = {}) {
       checkedFiles: facts.diff.files.checked.length,
       skippedOperationalFiles: facts.diagnostics.skippedOperationalFiles,
     },
+    ...anchorDiagnostics,
   });
 }

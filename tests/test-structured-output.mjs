@@ -363,6 +363,89 @@ function makeRegistryRepo() {
   };
 }
 
+function makeAnchorAwareRepo() {
+  const dir = mkdtempSync(join(tmpdir(), "repo-guard-anchors-"));
+  execSync("git init", { cwd: dir, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd: dir, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: dir, stdio: "pipe" });
+
+  const policy = {
+    policy_format_version: "0.3.0",
+    repository_kind: "tooling",
+    paths: {
+      forbidden: [],
+      canonical_docs: ["README.md"],
+      governance_paths: ["repo-policy.json"],
+    },
+    diff_rules: {
+      max_new_docs: 5,
+      max_new_files: 5,
+      max_net_added_lines: 500,
+    },
+    anchors: {
+      types: {
+        requirement_id: {
+          sources: [
+            { kind: "json_field", glob: "requirements/**/*.json", field: "id" },
+          ],
+        },
+        code_req_ref: {
+          sources: [
+            { kind: "regex", glob: "src/**", pattern: "@req\\s+([A-Z]+-[0-9]+)" },
+          ],
+        },
+      },
+    },
+    trace_rules: [
+      {
+        id: "code-refs-must-resolve",
+        kind: "must_resolve",
+        from_anchor_type: "code_req_ref",
+        to_anchor_type: "requirement_id",
+      },
+    ],
+    content_rules: [],
+    cochange_rules: [],
+  };
+
+  const contract = {
+    change_type: "feature",
+    scope: ["src/**"],
+    budgets: {},
+    anchors: {
+      affects: ["FR-001"],
+      implements: ["FR-999"],
+    },
+    must_touch: [],
+    must_not_touch: [],
+    expected_effects: ["Add anchor diagnostics to structured output"],
+  };
+
+  writeFileSync(join(dir, "repo-policy.json"), JSON.stringify(policy, null, 2));
+  writeFileSync(join(dir, "contract.json"), JSON.stringify(contract, null, 2));
+  writeFileSync(join(dir, "README.md"), "# Test\n");
+  execSync("mkdir -p requirements", { cwd: dir, stdio: "pipe" });
+  writeFileSync(join(dir, "requirements", "fr-001.json"), JSON.stringify({ id: "FR-001", title: "Login" }));
+  execSync("git add -A && git commit -m init", { cwd: dir, stdio: "pipe" });
+
+  execSync("mkdir -p src", { cwd: dir, stdio: "pipe" });
+  writeFileSync(join(dir, "src", "feature.mjs"), [
+    "export function feature() {",
+    "  return true; // @req FR-001",
+    "}",
+    "// @req FR-999",
+    "",
+  ].join("\n"));
+  execSync("git add -A && git commit -m feature", { cwd: dir, stdio: "pipe" });
+
+  return {
+    dir,
+    contractPath: "contract.json",
+    base: execSync("git rev-parse HEAD~1", { cwd: dir, encoding: "utf-8" }).trim(),
+    head: execSync("git rev-parse HEAD", { cwd: dir, encoding: "utf-8" }).trim(),
+  };
+}
+
 console.log("\n--- check-diff --format json emits stable machine-readable result ---");
 {
   const repo = makeRepo();
@@ -413,6 +496,74 @@ console.log("\n--- check-diff --format json emits stable machine-readable result
   expect("cochange violation is detailed",
     parsed?.violations.some((v) => v.rule.startsWith("cochange:") && v.must_touch.includes("tests/**")),
     true);
+
+  rmSync(repo.dir, { recursive: true });
+}
+
+console.log("\n--- check-diff reports anchor diagnostics in JSON and summary output ---");
+{
+  const repo = makeAnchorAwareRepo();
+  const result = runGuard([
+    "--repo-root", repo.dir,
+    "check-diff",
+    "--format", "json",
+    "--base", repo.base,
+    "--head", repo.head,
+    "--contract", repo.contractPath,
+  ]);
+
+  expect("anchor diagnostics do not change exit semantics before trace enforcement", result.code, 0);
+  let parsed = null;
+  try {
+    parsed = JSON.parse(result.stdout);
+    expect("anchor diagnostics stdout is valid json", true, true);
+  } catch (e) {
+    expect("anchor diagnostics stdout is valid json", e.message, "valid json");
+  }
+  expectTopLevelKeys("anchor-aware json shape adds diagnostics without removing stable fields", parsed, [
+    "advisoryWarnings",
+    "anchors",
+    "diff",
+    "exitCode",
+    "failed",
+    "hints",
+    "mode",
+    "ok",
+    "passed",
+    "repositoryRoot",
+    "result",
+    "ruleResults",
+    "traceRuleResults",
+    "violationCount",
+    "violations",
+    "warnings",
+  ]);
+  expect("anchor diagnostics count detected anchors", parsed?.anchors?.stats?.detected, 3);
+  expect("anchor diagnostics count changed anchors", parsed?.anchors?.stats?.changed, 2);
+  expect("anchor diagnostics count declared contract anchors", parsed?.anchors?.stats?.declaredByContract, 2);
+  expect("anchor diagnostics count unresolved anchors", parsed?.anchors?.stats?.unresolved, 1);
+  expect("anchor diagnostics expose declared contract affects", parsed?.anchors?.declaredByContract?.affects[0], "FR-001");
+  expect("anchor diagnostics expose changed anchor file",
+    parsed?.anchors?.changed.every((anchor) => anchor.file === "src/feature.mjs"),
+    true);
+  expect("trace rule diagnostics include one result", parsed?.traceRuleResults?.length, 1);
+  expect("trace rule diagnostics report non-enforced unresolved status", parsed?.traceRuleResults?.[0]?.ok, false);
+  expect("trace rule diagnostics report resolved value", parsed?.traceRuleResults?.[0]?.resolved[0]?.value, "FR-001");
+  expect("trace rule diagnostics report unresolved value", parsed?.traceRuleResults?.[0]?.unresolved[0]?.value, "FR-999");
+  expect("anchor unresolved list links back to rule", parsed?.anchors?.unresolved[0]?.rule, "code-refs-must-resolve");
+
+  const summary = runGuard([
+    "--repo-root", repo.dir,
+    "check-diff",
+    "--format", "summary",
+    "--base", repo.base,
+    "--head", repo.head,
+    "--contract", repo.contractPath,
+  ]);
+  expect("anchor summary exit semantics", summary.code, 0);
+  expectIncludes("summary reports anchor totals", summary.output, "- Anchors: 3 detected, 2 changed, 2 declared, 1 unresolved");
+  expectIncludes("summary reports unresolved trace rule", summary.output, "code-refs-must-resolve");
+  expectIncludes("summary reports unresolved anchor value", summary.output, "FR-999");
 
   rmSync(repo.dir, { recursive: true });
 }

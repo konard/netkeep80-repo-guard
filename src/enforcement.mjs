@@ -230,6 +230,12 @@ function renderMarkdownTableCell(value) {
     .replaceAll("\n", "<br>");
 }
 
+function formatAnchorLocation(instance) {
+  const line = instance.line ? `:${instance.line}` : "";
+  const column = instance.column ? `:${instance.column}` : "";
+  return `${instance.file}${line}${column}`;
+}
+
 export function createCheckReporter(mode, options = {}) {
   let passed = 0;
   let violations = 0;
@@ -323,6 +329,23 @@ export function renderCheckSummary(result) {
 
   if (result.diff) {
     lines.push(`- Diff: ${result.diff.changedFiles} file(s) changed${result.diff.skippedOperationalFiles ? `, ${result.diff.skippedOperationalFiles} operational skipped` : ""}`);
+  }
+
+  if (result.anchors) {
+    const stats = result.anchors.stats;
+    lines.push(`- Anchors: ${stats.detected} detected, ${stats.changed} changed, ${stats.declaredByContract} declared, ${stats.unresolved} unresolved`);
+
+    if (result.anchors.unresolved.length > 0) {
+      lines.push("", "| Trace rule | Anchor | Locations |", "|---|---|---|");
+      for (const unresolved of result.anchors.unresolved.slice(0, 10)) {
+        const anchor = `${unresolved.fromAnchorType} -> ${unresolved.toAnchorType}: ${unresolved.value}`;
+        const locations = unresolved.instances.map(formatAnchorLocation).join(", ");
+        lines.push(`| ${renderMarkdownTableCell(unresolved.rule)} | ${renderMarkdownTableCell(anchor)} | ${renderMarkdownTableCell(locations)} |`);
+      }
+      if (result.anchors.unresolved.length > 10) {
+        lines.push(`| ... | ... | ${result.anchors.unresolved.length - 10} more unresolved anchor(s) |`);
+      }
+    }
   }
 
   if (result.violations.length > 0) {

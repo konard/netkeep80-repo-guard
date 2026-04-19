@@ -256,7 +256,98 @@ The JSON result is intended as an API surface. Field names are stable and intent
 }
 ```
 
+When `repo-policy.json` declares `anchors`, the JSON result keeps the same
+top-level semantics and adds anchor diagnostics:
+
+```json
+{
+  "anchors": {
+    "detected": [
+      { "anchorType": "requirement_id", "value": "FR-001", "file": "requirements/fr-001.json", "sourceKind": "json_field" }
+    ],
+    "changed": [
+      { "anchorType": "code_req_ref", "value": "FR-999", "file": "src/feature.mjs", "sourceKind": "regex", "line": 4, "column": 9 }
+    ],
+    "declaredByContract": {
+      "affects": ["FR-001"],
+      "implements": ["FR-999"],
+      "verifies": [],
+      "all": [
+        { "relation": "affects", "value": "FR-001" },
+        { "relation": "implements", "value": "FR-999" }
+      ]
+    },
+    "unresolved": [
+      {
+        "rule": "code-refs-must-resolve",
+        "kind": "must_resolve",
+        "fromAnchorType": "code_req_ref",
+        "toAnchorType": "requirement_id",
+        "value": "FR-999",
+        "instances": [
+          { "anchorType": "code_req_ref", "value": "FR-999", "file": "src/feature.mjs", "sourceKind": "regex", "line": 4, "column": 9 }
+        ]
+      }
+    ],
+    "stats": {
+      "detected": 3,
+      "changed": 2,
+      "declaredByContract": 2,
+      "unresolved": 1,
+      "extractionErrors": 0,
+      "byType": {
+        "code_req_ref": { "detected": 2, "changed": 2 },
+        "requirement_id": { "detected": 1, "changed": 0 }
+      }
+    }
+  },
+  "traceRuleResults": [
+    {
+      "id": "code-refs-must-resolve",
+      "kind": "must_resolve",
+      "fromAnchorType": "code_req_ref",
+      "toAnchorType": "requirement_id",
+      "ok": false,
+      "resolved": [
+        {
+          "value": "FR-001",
+          "from": [
+            { "anchorType": "code_req_ref", "value": "FR-001", "file": "src/feature.mjs", "sourceKind": "regex", "line": 2, "column": 24 }
+          ],
+          "to": [
+            { "anchorType": "requirement_id", "value": "FR-001", "file": "requirements/fr-001.json", "sourceKind": "json_field" }
+          ]
+        }
+      ],
+      "unresolved": [
+        {
+          "value": "FR-999",
+          "instances": [
+            { "anchorType": "code_req_ref", "value": "FR-999", "file": "src/feature.mjs", "sourceKind": "regex", "line": 4, "column": 9 }
+          ]
+        }
+      ],
+      "stats": { "fromInstances": 2, "fromValues": 2, "toInstances": 1, "toValues": 1, "resolved": 1, "unresolved": 1 }
+    }
+  ]
+}
+```
+
+`anchors.detected` contains all normalized anchor instances found from tracked
+repository files and changed files. `anchors.changed` is the subset located in
+checked diff files. `anchors.declaredByContract` mirrors contract
+`anchors.affects`, `anchors.implements`, and `anchors.verifies`, with `all` as a
+relation/value list for tooling that does not want to inspect each relation.
+`anchors.unresolved` is an aggregate of unresolved trace diagnostics. In this
+version trace diagnostics are report-only: they do not change `ok`, `result`, or
+`exitCode`.
+
 Exit behavior is unchanged: in `blocking` mode violations exit `1`; in `advisory` mode violations are reported but the command exits `0`. Consumers should read both `ok` and `exitCode`: `ok` describes policy result, while `exitCode` describes command exit semantics for the active enforcement mode.
+
+`--format summary` also includes one concise anchor line when anchors are
+enabled, for example `Anchors: 3 detected, 2 changed, 2 declared, 1 unresolved`.
+When unresolved trace diagnostics exist, the summary adds a short table with the
+rule id, anchor value, and source locations.
 
 Example GitHub Actions usage:
 
@@ -300,6 +391,11 @@ repo-guard check-pr
     }
   },
   trackedFiles: ["README.md"],
+  anchors: {
+    instances: [/* normalized anchor instances */],
+    byType: { /* instances grouped by anchor type */ },
+    errors: [/* extraction diagnostics */]
+  },
   derived: {
     changedPaths: ["src/example.mjs"],
     touchedSurfaces: { /* surface detection result */ } | null,
@@ -554,6 +650,12 @@ Result: passed (mode: blocking; exit code 0)
 `json_field` читает top-level JSON field и нормализует scalar value в строку. `regex` сканирует matching files и, если pattern содержит capture group, берёт value из первого matched group; без capture group value равен полной matched строке. Каждый instance содержит `anchorType`, `value`, `file`, `sourceKind`, а regex instances также получают `line`, `column`, `captureGroup` и `raw`.
 
 Anchor extraction работает по tracked repository files и по changed files из diff, чтобы global requirement IDs и новые references были доступны в одной facts model. Если JSON не парсится, field отсутствует или source file не читается, check `anchor-extraction` завершается `FAIL` с диагностикой вида `[requirement_id json_field source 0] requirements/fr-001.json: field "id" not found`.
+
+Если policy содержит `trace_rules.kind = "must_resolve"`, structured output
+добавляет diagnostic-only `traceRuleResults`: для каждого значения from-anchor
+проверяется наличие matching value среди to-anchor instances. Эти diagnostics
+видны в JSON и summary output, но enforcement для trace rules зарезервирован для
+следующего runtime шага.
 
 ### 4. Пример failure
 
@@ -1006,7 +1108,8 @@ The self-hosted governance surface is declared in `repo-policy.json` under `path
 
 - `governance_paths` — информационное поле, не проверяется в runtime. Документирует, какие файлы управляют governance.
 - `public_api` — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
-- `anchors` (в change contract) — декларативный intent на уровне anchors. Принимается схемой, но runtime trace enforcement для anchors зарезервирован для будущих версий.
+- `anchors` (в change contract) — декларативный intent на уровне anchors. Принимается схемой и выводится в structured output как `anchors.declaredByContract`, но runtime trace enforcement для anchors зарезервирован для будущих версий.
+- `trace_rules.kind = "must_resolve"` — выводится в structured output как diagnostic-only `traceRuleResults`; unresolved diagnostics не меняют `ok`, `result` или `exitCode`.
 - `overrides` (в change contract) — зарезервировано для будущего использования. Принимается схемой, но не применяется; непустые значения выводят предупреждение.
 - `repo-guard` пока не публикует комментарии к PR.
 - Паттерны `forbid_regex` компилируются и проверяются до начала enforcement — ошибки в regex выявляются на этапе загрузки policy.
