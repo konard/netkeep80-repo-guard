@@ -557,6 +557,22 @@ expect("12. change type reports violating kernel surface", governanceViolation.v
 expect("12. change type reports docs budget", governanceViolation.docs_budget.ok, false);
 expect("12. change type reports new-file class violations", governanceViolation.new_file_rules.ok, false);
 
+const governanceUnclassifiedViolation = checkChangeTypeRules(
+  [
+    { path: "docs/policy.md", addedLines: ["docs"], deletedLines: [], status: "modified" },
+    { path: "scripts/tool.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
+  ],
+  changeTypePolicy,
+  "governance"
+);
+expect("12. change type surface constraints reject unclassified files", governanceUnclassifiedViolation.ok, false);
+expect("12. change type reports unclassified file", governanceUnclassifiedViolation.unclassified_files[0], "scripts/tool.mjs");
+expect(
+  "12. change type unclassified file appears in details",
+  governanceUnclassifiedViolation.details.some((detail) => detail.includes("scripts/tool.mjs")),
+  true
+);
+
 const kernelHardeningAllowed = checkChangeTypeRules(
   [
     { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },

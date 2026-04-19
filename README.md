@@ -592,7 +592,7 @@ Result: passed (mode: blocking; exit code 0)
 }
 ```
 
-Type rules can constrain touched surfaces with `allow_surfaces`, `forbid_surfaces`, and `require_surfaces`; apply stricter budgets with `max_new_docs`, `max_new_files`, and `max_net_added_lines`; and embed a type-local `new_file_rules` block. Existing repositories that do not define `change_type_rules` keep the previous behavior.
+Type rules can constrain touched surfaces with `allow_surfaces`, `forbid_surfaces`, and `require_surfaces`; apply stricter budgets with `max_new_docs`, `max_new_files`, and `max_net_added_lines`; and embed a type-local `new_file_rules` block. When a type rule uses surface constraints, every changed file must match at least one declared surface. This matches the fail-closed `surface_matrix` model so unclassified files cannot bypass type-aware topology checks. Existing repositories that do not define `change_type_rules` keep the previous behavior.
 
 При нарушении output показывает declared type и конкретное type-aware правило:
 

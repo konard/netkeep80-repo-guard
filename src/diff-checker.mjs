@@ -423,6 +423,11 @@ export function checkChangeTypeRules(files, policy, changeType) {
   const allowedSet = new Set(allowedSurfaces);
   const forbiddenSet = new Set(forbiddenSurfaces);
   const touchedSet = new Set(touchedSurfaces);
+  const usesSurfaceConstraints = requiredSurfaces.length > 0 ||
+    allowedSurfaces.length > 0 ||
+    forbiddenSurfaces.length > 0;
+  const unclassifiedFiles = detectedSurfaces.unclassified_files;
+  const hasUnclassifiedViolation = usesSurfaceConstraints && unclassifiedFiles.length > 0;
   const missingRequiredSurfaces = requiredSurfaces.filter((surface) => !touchedSet.has(surface));
   const notAllowedSurfaces = allowedSurfaces.length > 0
     ? touchedSurfaces.filter((surface) => !allowedSet.has(surface))
@@ -445,6 +450,9 @@ export function checkChangeTypeRules(files, policy, changeType) {
       (surface) => `surface ${surface} violated change_type_rules["${changeTypeValue}"] surface constraints; files: ${detectedSurfaces.files_by_surface[surface].join(", ")}`
     ),
   ];
+  if (hasUnclassifiedViolation) {
+    details.push(`changed files matched no declared surface: ${unclassifiedFiles.join(", ")}`);
+  }
   if (!docsBudget.ok) {
     details.push(`new docs ${docsBudget.actual} exceeds change_type_rules["${changeTypeValue}"].max_new_docs ${docsBudget.limit}; files: ${docsBudget.files.join(", ")}`);
   }
@@ -460,6 +468,7 @@ export function checkChangeTypeRules(files, policy, changeType) {
 
   const ok = missingRequiredSurfaces.length === 0 &&
     violatingSurfaces.length === 0 &&
+    !hasUnclassifiedViolation &&
     docsBudget.ok &&
     newFilesBudget.ok &&
     netLinesBudget.ok &&
@@ -476,12 +485,13 @@ export function checkChangeTypeRules(files, policy, changeType) {
     missing_required_surfaces: missingRequiredSurfaces,
     violating_surfaces: violatingSurfaces,
     files_by_surface: detectedSurfaces.files_by_surface,
-    unclassified_files: detectedSurfaces.unclassified_files,
+    unclassified_files: unclassifiedFiles,
     docs_budget: docsBudget,
     new_files_budget: newFilesBudget,
     net_added_lines_budget: netLinesBudget,
     new_file_rules: newFileResult,
     details,
+    hint: hasUnclassifiedViolation ? "Add matching surface globs so change_type_rules can classify every changed file." : undefined,
   };
 }
 
