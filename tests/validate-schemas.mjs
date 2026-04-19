@@ -68,6 +68,12 @@ expect("new_file_rules without allow_classes fails schema", validatePolicy(missi
 const validContract = loadJSON(resolve(root, "tests/fixtures/valid-contract.json"));
 expect("valid-contract.json passes schema", validateContract(validContract), true);
 
+const repositoryTypedContract = {
+  ...validContract,
+  change_type: "governance",
+};
+expect("repository-specific change_type passes schema", validateContract(repositoryTypedContract), true);
+
 const invalidContract = loadJSON(resolve(root, "tests/fixtures/invalid-contract.json"));
 expect("invalid-contract.json fails schema", validateContract(invalidContract), false);
 

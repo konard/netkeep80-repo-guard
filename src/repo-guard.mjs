@@ -19,10 +19,12 @@ import {
   checkContentRules,
   checkMustTouch,
   checkMustNotTouch,
+  checkChangeTypeRules,
 } from "./diff-checker.mjs";
 import {
   compileForbidRegex,
   compileNewFilePolicy,
+  compileChangeTypePolicy,
   compileSurfacePolicy,
   warnReservedContractFields,
   warnReservedPolicyFields,
@@ -191,6 +193,17 @@ function runCheckDiff(roots, args) {
     }
   }
 
+  const changeTypeErrors = compileChangeTypePolicy(policy);
+  if (changeTypeErrors.length > 0) {
+    ok = false;
+    if (!quiet) {
+      console.error("FAIL: change type policy compilation");
+      for (const e of changeTypeErrors) {
+        console.error(`  ${e.message}`);
+      }
+    }
+  }
+
   if (!quiet) {
     for (const w of warnReservedPolicyFields(policy)) {
       console.warn(`WARN: ${w}`);
@@ -254,6 +267,10 @@ function runCheckDiff(roots, args) {
   reporter.report("max-new-files", checkNewFilesBudget(files, maxNewFiles));
   reporter.report("max-net-added-lines", checkNetAddedLinesBudget(files, maxNetAddedLines));
   reporter.report("surface-debt", checkSurfaceDebt(files, contract?.surface_debt));
+
+  if (policy.change_type_rules) {
+    reporter.report("change-type-rules", checkChangeTypeRules(files, policy, contract?.change_type));
+  }
 
   const declaredChangeClass = cliChangeClass || contract?.change_class || null;
   if (policy.new_file_rules) {
