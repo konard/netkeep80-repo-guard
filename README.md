@@ -557,6 +557,55 @@ Result: passed (mode: blocking; exit code 0)
 
 Файлы, которые не совпали ни с одним glob из `new_file_classes`, считаются unclassified и тоже fail, когда `new_file_rules` активны. Старое поведение `max_new_files` не меняется: если `new_file_classes` и `new_file_rules` отсутствуют, repo-guard продолжает применять только плоские budgets.
 
+## Issue Type Rules
+
+`change_type` в contract описывает тип работы: например `governance`, `kernel-hardening`, `docs-cleanup` или любой другой тип, принятый в репозитории. Policy может сделать этот тип first-class input через `change_type_rules`:
+
+```json
+{
+  "surfaces": {
+    "kernel": ["src/**"],
+    "tests": ["tests/**"],
+    "docs": ["docs/**", "README.md"],
+    "generated": ["single_include/**"]
+  },
+  "new_file_classes": {
+    "test": ["tests/**"],
+    "changelog_fragment": ["changelog.d/*.md"],
+    "generated": ["single_include/**"]
+  },
+  "change_type_rules": {
+    "governance": {
+      "max_new_docs": 0,
+      "forbid_surfaces": ["kernel", "generated"],
+      "new_file_rules": {
+        "allow_classes": ["changelog_fragment"],
+        "max_per_class": {
+          "changelog_fragment": 1
+        }
+      }
+    },
+    "kernel-hardening": {
+      "require_surfaces": ["tests"]
+    }
+  }
+}
+```
+
+Type rules can constrain touched surfaces with `allow_surfaces`, `forbid_surfaces`, and `require_surfaces`; apply stricter budgets with `max_new_docs`, `max_new_files`, and `max_net_added_lines`; and embed a type-local `new_file_rules` block. Existing repositories that do not define `change_type_rules` keep the previous behavior.
+
+При нарушении output показывает declared type и конкретное type-aware правило:
+
+```text
+  FAIL: change-type-rules
+    change_type "governance" violated change_type_rules
+    change_type: governance
+    touched_surfaces: docs, generated, kernel
+    forbidden_surfaces: generated, kernel
+    violating_surfaces: generated, kernel
+    new docs 1 exceeds change_type_rules["governance"].max_new_docs 0; files: docs/new.md
+```
+
 ## Ownership-aware surfaces
 
 Глобальный `paths.forbidden` хорошо работает для файлов, которые нельзя трогать никогда. Но generated, release или governance surfaces часто нельзя запрещать глобально: regeneration PR должен иметь право менять generated-файлы, а обычный docs PR — нет.

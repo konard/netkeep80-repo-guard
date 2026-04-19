@@ -14,6 +14,7 @@ import {
   checkSurfaceMatrix,
   classifyNewFiles,
   checkNewFileRules,
+  checkChangeTypeRules,
 } from "../src/diff-checker.mjs";
 
 let failures = 0;
@@ -509,6 +510,80 @@ expect(
   "11. new file rules pass when no new files exist without change_class",
   checkNewFileRules([{ path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" }], newFileClasses, newFileRules, null).ok,
   true
+);
+
+// --- 12. change type rules ---
+
+const changeTypePolicy = {
+  paths: {
+    canonical_docs: ["README.md"],
+  },
+  surfaces: {
+    ...surfaces,
+    docs: [...surfaces.docs, "changelog.d/*.md"],
+  },
+  new_file_classes: newFileClasses,
+  change_type_rules: {
+    governance: {
+      allow_surfaces: ["docs"],
+      forbid_surfaces: ["kernel", "generated"],
+      max_new_docs: 0,
+      max_new_files: 1,
+      new_file_rules: {
+        allow_classes: ["changelog_fragment"],
+        max_per_class: {
+          changelog_fragment: 1,
+        },
+      },
+    },
+    "kernel-hardening": {
+      require_surfaces: ["tests"],
+    },
+  },
+};
+
+const governanceViolation = checkChangeTypeRules(
+  [
+    { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
+    { path: "docs/new.md", addedLines: ["docs"], deletedLines: [], status: "added" },
+    { path: "single_include/core.h", addedLines: ["generated"], deletedLines: [], status: "added" },
+  ],
+  changeTypePolicy,
+  "governance"
+);
+expect("12. change type rules reject forbidden surfaces", governanceViolation.ok, false);
+expect("12. change type result names declared type", governanceViolation.change_type, "governance");
+expect("12. change type reports violating kernel surface", governanceViolation.violating_surfaces.includes("kernel"), true);
+expect("12. change type reports docs budget", governanceViolation.docs_budget.ok, false);
+expect("12. change type reports new-file class violations", governanceViolation.new_file_rules.ok, false);
+
+const kernelHardeningAllowed = checkChangeTypeRules(
+  [
+    { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
+    { path: "tests/core.test.mjs", addedLines: ["test"], deletedLines: [], status: "modified" },
+  ],
+  changeTypePolicy,
+  "kernel-hardening"
+);
+expect("12. change type rules pass allowed constraints", kernelHardeningAllowed.ok, true);
+
+const missingRequiredSurface = checkChangeTypeRules(
+  [{ path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" }],
+  changeTypePolicy,
+  "kernel-hardening"
+);
+expect("12. change type require_surfaces fails when missing", missingRequiredSurface.ok, false);
+expect("12. change type missing surface reported", missingRequiredSurface.missing_required_surfaces[0], "tests");
+
+expect(
+  "12. change type rules require declared change_type",
+  checkChangeTypeRules(surfaceFiles, changeTypePolicy, null).ok,
+  false
+);
+expect(
+  "12. unknown change_type fails with known types",
+  checkChangeTypeRules(surfaceFiles, changeTypePolicy, "release").ok,
+  false
 );
 
 // --- Summary ---

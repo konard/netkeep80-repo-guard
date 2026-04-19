@@ -15,7 +15,8 @@
   "properties": {
     "change_type": {
       "type": "string",
-      "enum": ["feature", "bugfix", "refactor", "docs", "chore"]
+      "minLength": 1,
+      "description": "Declared issue or change type. Repositories may attach policy constraints to this value with change_type_rules."
     },
     "change_class": {
       "type": "string",

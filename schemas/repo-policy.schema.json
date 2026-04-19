@@ -168,6 +168,67 @@
         }
       }
     },
+    "change_type_rules": {
+      "type": "object",
+      "description": "Per-change-type policy constraints keyed by contract change_type.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allow_surfaces": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "forbid_surfaces": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "require_surfaces": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "max_new_docs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_new_files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_net_added_lines": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "new_file_rules": {
+            "type": "object",
+            "required": ["allow_classes"],
+            "additionalProperties": false,
+            "properties": {
+              "allow_classes": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              },
+              "max_per_class": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "max_new_files": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
     "content_rules": {
       "type": "array",
       "items": {

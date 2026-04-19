@@ -80,6 +80,9 @@ function printCheckDetails(mode, check) {
   if (hasOwn(check, "change_class")) {
     write(`    change_class: ${check.change_class || "(missing)"}`);
   }
+  if (hasOwn(check, "change_type")) {
+    write(`    change_type: ${check.change_type || "(missing)"}`);
+  }
   if (check.touched_surfaces) {
     write(`    touched_surfaces: ${formatList(check.touched_surfaces)}`);
   }
@@ -136,6 +139,7 @@ function detailFromCheck(check) {
   if (check.must_touch) details.push(`must_touch: ${check.must_touch.join(", ")}`);
   if (check.must_not_touch) details.push(`must_not_touch: ${check.must_not_touch.join(", ")}`);
   if (hasOwn(check, "change_class")) details.push(`change_class: ${check.change_class || "(missing)"}`);
+  if (hasOwn(check, "change_type")) details.push(`change_type: ${check.change_type || "(missing)"}`);
   if (check.touched_surfaces) details.push(`touched_surfaces: ${formatList(check.touched_surfaces)}`);
   if (check.new_files) details.push(`new_files: ${formatList(check.new_files)}`);
   if (check.allowed_classes) details.push(`allowed_classes: ${formatList(check.allowed_classes)}`);
@@ -177,6 +181,7 @@ function violationFromCheck(name, check) {
   if (check.growth) violation.growth = check.growth;
   if (check.surface_debt) violation.surface_debt = check.surface_debt;
   if (hasOwn(check, "change_class")) violation.change_class = check.change_class;
+  if (hasOwn(check, "change_type")) violation.change_type = check.change_type;
   if (check.touched_surfaces) violation.touched_surfaces = check.touched_surfaces;
   if (check.new_files) violation.new_files = check.new_files;
   if (check.allowed_classes) violation.allowed_classes = check.allowed_classes;
