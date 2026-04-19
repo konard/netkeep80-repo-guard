@@ -77,6 +77,24 @@ function printCheckDetails(mode, check) {
   if (check.must_not_touch) {
     write(`    must_not_touch: ${check.must_not_touch.join(", ")}`);
   }
+  if (check.if_changed) {
+    write(`    if_changed: ${formatList(check.if_changed)}`);
+  }
+  if (check.must_touch_any) {
+    write(`    must_touch_any: ${formatList(check.must_touch_any)}`);
+  }
+  if (check.changed_files) {
+    write(`    changed_files: ${formatList(check.changed_files)}`);
+  }
+  if (check.evidence_files) {
+    write(`    evidence_files: ${formatList(check.evidence_files)}`);
+  }
+  if (check.contract_field) {
+    write(`    contract_field: ${check.contract_field}`);
+  }
+  if (check.declared_anchors) {
+    write(`    declared_anchors: ${formatList(check.declared_anchors)}`);
+  }
   if (hasOwn(check, "change_class")) {
     write(`    change_class: ${check.change_class || "(missing)"}`);
   }
@@ -149,6 +167,12 @@ function detailFromCheck(check) {
   if (check.touched) details.push(...check.touched.map((f) => `touched: ${f}`));
   if (check.must_touch) details.push(`must_touch: ${check.must_touch.join(", ")}`);
   if (check.must_not_touch) details.push(`must_not_touch: ${check.must_not_touch.join(", ")}`);
+  if (check.if_changed) details.push(`if_changed: ${formatList(check.if_changed)}`);
+  if (check.must_touch_any) details.push(`must_touch_any: ${formatList(check.must_touch_any)}`);
+  if (check.changed_files) details.push(`changed_files: ${formatList(check.changed_files)}`);
+  if (check.evidence_files) details.push(`evidence_files: ${formatList(check.evidence_files)}`);
+  if (check.contract_field) details.push(`contract_field: ${check.contract_field}`);
+  if (check.declared_anchors) details.push(`declared_anchors: ${formatList(check.declared_anchors)}`);
   if (hasOwn(check, "change_class")) details.push(`change_class: ${check.change_class || "(missing)"}`);
   if (hasOwn(check, "change_type")) details.push(`change_type: ${check.change_type || "(missing)"}`);
   if (check.touched_surfaces) details.push(`touched_surfaces: ${formatList(check.touched_surfaces)}`);
@@ -197,6 +221,12 @@ function violationFromCheck(name, check) {
     hint: check.hint,
   };
 
+  if (check.if_changed) violation.if_changed = check.if_changed;
+  if (check.must_touch_any) violation.must_touch_any = check.must_touch_any;
+  if (check.changed_files) violation.changed_files = check.changed_files;
+  if (check.evidence_files) violation.evidence_files = check.evidence_files;
+  if (check.contract_field) violation.contract_field = check.contract_field;
+  if (check.declared_anchors) violation.declared_anchors = check.declared_anchors;
   if (check.status) violation.status = check.status;
   if (check.growth) violation.growth = check.growth;
   if (check.surface_debt) violation.surface_debt = check.surface_debt;

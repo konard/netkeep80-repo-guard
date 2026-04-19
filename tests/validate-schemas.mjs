@@ -68,6 +68,25 @@ const policyWithAnchors = {
 };
 expect("policy with anchors and trace_rules passes schema", validatePolicy(policyWithAnchors), true);
 
+const policyWithEvidenceRules = {
+  ...validPolicy,
+  trace_rules: [
+    {
+      id: "changed-requirements-need-evidence",
+      kind: "changed_files_require_evidence",
+      if_changed: ["requirements/**"],
+      must_touch_any: ["src/**", "tests/**", "docs/**"],
+    },
+    {
+      id: "declared-anchors-need-evidence",
+      kind: "declared_anchors_require_evidence",
+      contract_field: "anchors.affects",
+      must_touch_any: ["src/**", "tests/**", "docs/**"],
+    },
+  ],
+};
+expect("policy with evidence trace_rules passes schema", validatePolicy(policyWithEvidenceRules), true);
+
 // Content rules normalization tests
 const oldFormPolicy = loadJSON(resolve(root, "tests/fixtures/invalid-content-rule-old-form.json"));
 expect("old-form content_rules (pattern/severity/message) fails schema", validatePolicy(oldFormPolicy), false);

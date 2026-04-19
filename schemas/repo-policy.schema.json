@@ -296,18 +296,8 @@
     },
     "trace_rules": {
       "type": "array",
-      "description": "Trace/evidence rules between declared anchor types. must_resolve rules enforce that from-anchor values resolve to matching to-anchor values.",
-      "items": {
-        "type": "object",
-        "required": ["id", "kind", "from_anchor_type", "to_anchor_type"],
-        "additionalProperties": false,
-        "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "kind": { "type": "string", "enum": ["must_resolve"] },
-          "from_anchor_type": { "type": "string", "minLength": 1 },
-          "to_anchor_type": { "type": "string", "minLength": 1 }
-        }
-      }
+      "description": "Trace/evidence rules. must_resolve rules enforce that from-anchor values resolve to matching to-anchor values. Evidence rules enforce that changed requirement artifacts or declared contract anchors are backed by configured evidence surfaces.",
+      "items": { "$ref": "#/definitions/trace_rule" }
     },
     "content_rules": {
       "type": "array",
@@ -352,6 +342,51 @@
     }
   },
   "definitions": {
+    "non_empty_string_array": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "trace_rule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "kind", "from_anchor_type", "to_anchor_type"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "kind": { "const": "must_resolve" },
+            "from_anchor_type": { "type": "string", "minLength": 1 },
+            "to_anchor_type": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "kind", "if_changed", "must_touch_any"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "kind": { "const": "changed_files_require_evidence" },
+            "if_changed": { "$ref": "#/definitions/non_empty_string_array" },
+            "must_touch_any": { "$ref": "#/definitions/non_empty_string_array" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "kind", "contract_field", "must_touch_any"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "kind": { "const": "declared_anchors_require_evidence" },
+            "contract_field": {
+              "type": "string",
+              "enum": ["anchors.affects", "anchors.implements", "anchors.verifies"]
+            },
+            "must_touch_any": { "$ref": "#/definitions/non_empty_string_array" }
+          }
+        }
+      ]
+    },
     "anchor_source": {
       "oneOf": [
         {

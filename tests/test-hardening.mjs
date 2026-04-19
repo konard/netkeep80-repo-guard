@@ -305,6 +305,26 @@ describe("anchor policy compilation", () => {
     assert.ok(errors[0].message.includes("pattern is invalid"));
   });
 
+  it("accepts evidence trace rules without anchor extractors", () => {
+    const errors = compileAnchorPolicy({
+      trace_rules: [
+        {
+          id: "changed-requirements-need-evidence",
+          kind: "changed_files_require_evidence",
+          if_changed: ["requirements/**"],
+          must_touch_any: ["src/**", "tests/**", "docs/**"],
+        },
+        {
+          id: "declared-anchors-need-evidence",
+          kind: "declared_anchors_require_evidence",
+          contract_field: "anchors.affects",
+          must_touch_any: ["src/**", "tests/**", "docs/**"],
+        },
+      ],
+    });
+    assert.equal(errors.length, 0);
+  });
+
   it("keeps policies without anchors and trace_rules compatible", () => {
     const errors = compileAnchorPolicy({});
     assert.equal(errors.length, 0);
