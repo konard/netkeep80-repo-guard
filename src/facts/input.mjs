@@ -13,38 +13,54 @@ export function listTrackedFiles(repoRoot) {
 }
 
 export function buildPolicyFacts({
+  mode = "check-diff",
   repositoryRoot,
   policy,
   contract = null,
+  contractSource = "none",
   enforcement,
   diffText,
   trackedFiles = null,
   declaredChangeClass = null,
+  diagnostics = {},
 }) {
-  const diffFiles = parseDiff(diffText);
-  const filteredOperationalFiles = filterOperationalPaths(diffFiles, policy.paths.operational_paths);
-  const changedPaths = filteredOperationalFiles.map((file) => file.path);
-  const skippedOperationalFiles = diffFiles.length - filteredOperationalFiles.length;
+  const allFiles = parseDiff(diffText);
+  const checkedFiles = filterOperationalPaths(allFiles, policy.paths.operational_paths);
+  const skippedOperationalFiles = allFiles.filter((file) => !checkedFiles.includes(file));
+  const changedPaths = checkedFiles.map((file) => file.path);
+  const resolvedTrackedFiles = trackedFiles || listTrackedFiles(repositoryRoot);
+  const touchedSurfaces = policy.surfaces
+    ? detectTouchedSurfaces(checkedFiles, policy.surfaces)
+    : null;
+  const newFileClasses = policy.new_file_classes
+    ? classifyNewFiles(checkedFiles, policy.new_file_classes)
+    : null;
 
   return {
+    mode,
     repositoryRoot,
     policy,
     contract,
+    contractSource,
     enforcementMode: enforcement.mode,
     enforcement,
-    diffFiles,
-    filteredOperationalFiles,
-    changedPaths,
-    trackedFiles: trackedFiles || listTrackedFiles(repositoryRoot),
-    touchedSurfaces: policy.surfaces
-      ? detectTouchedSurfaces(filteredOperationalFiles, policy.surfaces)
-      : null,
-    newFileClasses: policy.new_file_classes
-      ? classifyNewFiles(filteredOperationalFiles, policy.new_file_classes)
-      : null,
+    diff: {
+      files: {
+        all: allFiles,
+        checked: checkedFiles,
+        skippedOperational: skippedOperationalFiles,
+      },
+    },
+    trackedFiles: resolvedTrackedFiles,
+    derived: {
+      changedPaths,
+      touchedSurfaces,
+      newFileClasses,
+    },
     declaredChangeClass,
     diagnostics: {
-      skippedOperationalFiles,
+      ...diagnostics,
+      skippedOperationalFiles: skippedOperationalFiles.length,
     },
   };
 }

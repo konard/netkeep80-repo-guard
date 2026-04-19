@@ -64,6 +64,58 @@ export function checkPrerequisites() {
   return missing;
 }
 
+export function resolvePRContractFacts({ prBody, issueBody = null, linkedIssueCount = null }) {
+  const prResult = extractContract(prBody);
+  if (prResult.ok) {
+    return {
+      ok: true,
+      contract: prResult.contract,
+      contractSource: "pr body",
+      linkedIssues: extractLinkedIssueNumbers(prBody),
+    };
+  }
+
+  if (prResult.error !== "contract_not_found") {
+    return {
+      ok: false,
+      error: prResult.error,
+      message: prResult.message,
+      contractSource: "pr body",
+      linkedIssues: extractLinkedIssueNumbers(prBody),
+    };
+  }
+
+  const linkedIssues = extractLinkedIssueNumbers(prBody);
+  const resolvedLinkedIssueCount = linkedIssueCount ?? linkedIssues.length;
+  if (resolvedLinkedIssueCount > 1) {
+    return {
+      ok: false,
+      error: "issue_link_ambiguous",
+      message: `PR body references ${resolvedLinkedIssueCount} issues (${linkedIssues.map(n => `#${n}`).join(", ")}); expected exactly one`,
+      contractSource: "none",
+      linkedIssues,
+    };
+  }
+
+  const issueResult = resolveContract(prBody, issueBody);
+  if (issueResult.ok) {
+    return {
+      ok: true,
+      contract: issueResult.contract,
+      contractSource: "linked issue",
+      linkedIssues,
+    };
+  }
+
+  return {
+    ok: false,
+    error: issueResult.error,
+    message: issueResult.message,
+    contractSource: "none",
+    linkedIssues,
+  };
+}
+
 export function runCheckPR(roots, args = []) {
   for (const arg of args) {
     if (arg.startsWith("-")) {
@@ -106,29 +158,32 @@ export function runCheckPR(roots, args = []) {
   }
 
   let issueBody = null;
-  let contractFailure = null;
   const prResult = extractContract(prBody);
   if (!prResult.ok && prResult.error === "contract_not_found") {
     const linkedIssues = extractLinkedIssueNumbers(prBody);
     if (linkedIssues.length > 1) {
-      contractFailure = {
-        error: "issue_link_ambiguous",
-        message: `PR body references ${linkedIssues.length} issues (${linkedIssues.map(n => `#${n}`).join(", ")}); expected exactly one`,
-      };
+      // Handled by resolvePRContractFacts after preserving linked issue diagnostics.
     } else if (linkedIssues.length === 1) {
       console.log(`No contract in PR body; trying linked issue #${linkedIssues[0]}...`);
       issueBody = fetchIssueBody(repoFullName, linkedIssues[0]);
-      if (!issueBody) {
-        contractFailure = {
-          error: "issue_fetch_failed",
-          message: `Could not fetch issue #${linkedIssues[0]} body`,
-        };
-      }
     }
   }
 
-  const contractResult = contractFailure || resolveContract(prBody, issueBody);
+  let contractResult = resolvePRContractFacts({ prBody, issueBody });
+  if (
+    !contractResult.ok &&
+    contractResult.linkedIssues.length === 1 &&
+    issueBody === null &&
+    contractResult.error !== "issue_link_ambiguous"
+  ) {
+    contractResult = {
+      ...contractResult,
+      error: "issue_fetch_failed",
+      message: `Could not fetch issue #${contractResult.linkedIssues[0]} body`,
+    };
+  }
   let contract = null;
+  let contractSource = contractResult.contractSource || "none";
   const initialChecks = [];
   if (!contractResult.ok) {
     initialChecks.push({
@@ -143,6 +198,7 @@ export function runCheckPR(roots, args = []) {
     initialChecks.push({ name: "change-contract", check: contractCheck });
     if (contractCheck.ok) {
       contract = contractResult.contract;
+      contractSource = contractResult.contractSource;
       for (const w of warnReservedContractFields(contract)) {
         console.warn(`WARN: ${w}`);
       }
@@ -151,9 +207,11 @@ export function runCheckPR(roots, args = []) {
 
   const diffText = execSync(`git diff ${base}...${head}`, { encoding: "utf-8", cwd: roots.repoRoot });
   const summary = runPolicyPipeline({
+    mode: "check-pr",
     repositoryRoot: roots.repoRoot,
     policy,
     contract,
+    contractSource,
     enforcement,
     diffText,
     declaredChangeClass: contract?.change_class || null,

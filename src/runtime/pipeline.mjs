@@ -17,7 +17,7 @@ export function runPolicyPipeline(input, options = {}) {
   const facts = buildPolicyFacts(input);
   if (!quiet) {
     const skipped = facts.diagnostics.skippedOperationalFiles;
-    console.log(`\nDiff analysis: ${facts.diffFiles.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
+    console.log(`\nDiff analysis: ${facts.diff.files.all.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
   }
 
   runPolicyChecks(facts, reporter);
@@ -25,8 +25,8 @@ export function runPolicyPipeline(input, options = {}) {
   return reporter.finish({
     repositoryRoot: facts.repositoryRoot,
     diff: {
-      changedFiles: facts.diffFiles.length,
-      checkedFiles: facts.filteredOperationalFiles.length,
+      changedFiles: facts.diff.files.all.length,
+      checkedFiles: facts.diff.files.checked.length,
       skippedOperationalFiles: facts.diagnostics.skippedOperationalFiles,
     },
   });

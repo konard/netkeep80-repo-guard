@@ -54,9 +54,11 @@ const diffText = [
 
 function runEquivalentInput(extra = {}) {
   return runPolicyPipeline({
+    mode: "check-diff",
     repositoryRoot: "/tmp/repo-guard-test",
     policy,
     contract: null,
+    contractSource: "none",
     enforcement: { ok: true, mode: "blocking", source: "test", requested: "blocking" },
     diffText,
     trackedFiles: ["README.md", "src/existing.mjs"],
@@ -68,9 +70,11 @@ function runEquivalentInput(extra = {}) {
 
 function buildEquivalentFacts(extra = {}) {
   return buildPolicyFacts({
+    mode: "check-diff",
     repositoryRoot: "/tmp/repo-guard-test",
     policy,
     contract: null,
+    contractSource: "none",
     enforcement: { ok: true, mode: "blocking", source: "test", requested: "blocking" },
     diffText,
     trackedFiles: ["README.md", "src/existing.mjs"],
@@ -88,9 +92,17 @@ console.log("\n--- shared policy pipeline normalizes facts and checks ---");
     checkedFiles: 1,
     skippedOperationalFiles: 1,
   });
-  expect("facts expose normalized changed paths", facts.changedPaths, ["src/feature.mjs"]);
-  expect("facts extract touched surfaces", facts.touchedSurfaces.touched_surfaces, ["source"]);
-  expect("facts classify new files", facts.newFileClasses.files_by_class, {
+  expect("facts identify check-diff mode", facts.mode, "check-diff");
+  expect("facts identify contract source", facts.contractSource, "none");
+  expect("facts expose all diff files", facts.diff.files.all.map((file) => file.path), [
+    "src/feature.mjs",
+    ".github/workflows/ci.yml",
+  ]);
+  expect("facts expose checked diff files", facts.diff.files.checked.map((file) => file.path), ["src/feature.mjs"]);
+  expect("facts expose skipped operational files", facts.diff.files.skippedOperational.map((file) => file.path), [".github/workflows/ci.yml"]);
+  expect("facts expose normalized changed paths", facts.derived.changedPaths, ["src/feature.mjs"]);
+  expect("facts extract touched surfaces", facts.derived.touchedSurfaces.touched_surfaces, ["source"]);
+  expect("facts classify new files", facts.derived.newFileClasses.files_by_class, {
     source: ["src/feature.mjs"],
   });
   expect(
@@ -104,12 +116,21 @@ console.log("\n--- equivalent command inputs share one result shape ---");
 {
   const checkDiffStyle = runEquivalentInput();
   const checkPrStyle = runEquivalentInput({
+    mode: "check-pr",
+    contractSource: "pr body",
     initialChecks: [{ name: "change-contract", check: { ok: true } }],
   });
   const checkDiffFacts = buildEquivalentFacts();
-  const checkPrFacts = buildEquivalentFacts();
+  const checkPrFacts = buildEquivalentFacts({ mode: "check-pr", contractSource: "pr body" });
 
-  expect("equivalent facts are identical", checkPrFacts, checkDiffFacts);
+  expect("equivalent facts keep mode-specific provenance", {
+    mode: checkPrFacts.mode,
+    contractSource: checkPrFacts.contractSource,
+  }, {
+    mode: "check-pr",
+    contractSource: "pr body",
+  });
+  expect("equivalent facts share checked diff paths", checkPrFacts.derived.changedPaths, checkDiffFacts.derived.changedPaths);
   expect(
     "check-pr style input adds contract validation without changing policy check result",
     checkPrStyle.violations.map((violation) => violation.rule),

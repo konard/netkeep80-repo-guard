@@ -136,9 +136,11 @@ function runCheckDiff(roots, args) {
   const declaredChangeClass = cliChangeClass || contract?.change_class || null;
 
   const summary = runPolicyPipeline({
+    mode: "check-diff",
     repositoryRoot: roots.repoRoot,
     policy,
     contract,
+    contractSource: contractPath ? "cli file" : "none",
     enforcement,
     diffText,
     declaredChangeClass,

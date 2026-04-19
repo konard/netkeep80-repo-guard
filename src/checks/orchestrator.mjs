@@ -17,7 +17,7 @@ import {
 
 export function runPolicyChecks(facts, reporter) {
   const policy = facts.policy;
-  const files = facts.filteredOperationalFiles;
+  const files = facts.diff.files.checked;
   const contract = facts.contract;
 
   const forbiddenViolations = checkForbiddenPaths(files, policy.paths.forbidden);

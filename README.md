@@ -279,6 +279,39 @@ repo-guard check-pr
 - `gh` CLI с авторизацией (для fallback на linked issue);
 - event payload типа `pull_request` с base/head SHA.
 
+### Normalized Facts Model
+
+`check-diff` and `check-pr` both normalize their inputs before policy checks run. The command modes differ only in how they gather input: `check-diff` reads local CLI refs and an optional contract file, while `check-pr` reads the GitHub pull request event and optionally falls back to a linked issue. After that adapter step, checks consume the same facts object:
+
+```js
+{
+  mode: "check-diff" | "check-pr",
+  repositoryRoot: "/absolute/repo",
+  policy: { /* validated repo-policy.json */ },
+  contract: { /* validated change contract */ } | null,
+  contractSource: "cli file" | "pr body" | "linked issue" | "none",
+  enforcement: { mode: "blocking" | "advisory" },
+  diff: {
+    files: {
+      all: [/* parsed git diff files */],
+      checked: [/* all minus operational paths */],
+      skippedOperational: [/* files ignored by policy.paths.operational_paths */]
+    }
+  },
+  trackedFiles: ["README.md"],
+  derived: {
+    changedPaths: ["src/example.mjs"],
+    touchedSurfaces: { /* surface detection result */ } | null,
+    newFileClasses: { /* new file classification result */ } | null
+  },
+  diagnostics: {
+    skippedOperationalFiles: 0
+  }
+}
+```
+
+Policy checks read from this normalized model instead of from raw command parameters. That keeps runtime checks source-agnostic and leaves PR markdown, linked issue lookup, and CLI file loading in adapter code that can be tested directly.
+
 ### Advisory vs blocking
 
 `repo-guard` separates command mode (`check-pr`, `check-diff`) from enforcement behavior:

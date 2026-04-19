@@ -1,7 +1,7 @@
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadGitHubEvent } from "../src/github-pr.mjs";
+import { loadGitHubEvent, resolvePRContractFacts } from "../src/github-pr.mjs";
 import { resolveContract, extractLinkedIssueNumbers } from "../src/markdown-contract.mjs";
 
 let failures = 0;
@@ -96,6 +96,10 @@ Fixes #10
   expect("integration valid: change_type", result.contract.change_type, "bugfix");
   expect("integration valid: scope", result.contract.scope[0], "src/auth.mjs");
 
+  const facts = resolvePRContractFacts({ prBody });
+  expect("integration valid: adapter ok", facts.ok, true);
+  expect("integration valid: adapter source", facts.contractSource, "pr body");
+
   const issues = extractLinkedIssueNumbers(prBody);
   expect("integration valid: linked issue", issues[0], 10);
 }
@@ -122,6 +126,11 @@ Feature request.
   const result = resolveContract(prBody, issueBody);
   expect("integration fallback: ok", result.ok, true);
   expect("integration fallback: from issue", result.contract.change_type, "feature");
+
+  const facts = resolvePRContractFacts({ prBody, issueBody });
+  expect("integration fallback: adapter ok", facts.ok, true);
+  expect("integration fallback: adapter source", facts.contractSource, "linked issue");
+  expect("integration fallback: adapter linked issue", facts.linkedIssues[0], 15);
 }
 
 // --- Integration: ambiguous linked issues (>1) should be detected ---
@@ -137,6 +146,11 @@ Feature request.
   const prResult = resolveContract(prBody, null);
   expect("ambiguous links: no contract in PR", prResult.ok, false);
   expect("ambiguous links: contract_not_found", prResult.error, "contract_not_found");
+
+  const facts = resolvePRContractFacts({ prBody });
+  expect("ambiguous links: adapter fails", facts.ok, false);
+  expect("ambiguous links: adapter error", facts.error, "issue_link_ambiguous");
+  expect("ambiguous links: adapter source", facts.contractSource, "none");
 }
 
 {
@@ -154,6 +168,11 @@ Feature request.
   const result = resolveContract(prBody, issueBody);
   expect("integration missing: ok", result.ok, false);
   expect("integration missing: error", result.error, "fallback_missing");
+
+  const facts = resolvePRContractFacts({ prBody, issueBody });
+  expect("integration missing: adapter ok", facts.ok, false);
+  expect("integration missing: adapter error", facts.error, "fallback_missing");
+  expect("integration missing: adapter source", facts.contractSource, "none");
 }
 
 console.log(`\n${failures === 0 ? "All tests passed" : `${failures} test(s) failed`}`);
