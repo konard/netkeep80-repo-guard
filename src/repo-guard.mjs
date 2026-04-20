@@ -34,7 +34,7 @@ export function resolveRoots(args) {
       const next = args[i + 1];
       if (!next || next.startsWith("-")) {
         console.error("Error: --repo-root requires a path argument");
-        console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor] [options]");
+        console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor|validate-integration] [options]");
         process.exit(1);
       }
       repoRoot = resolve(args[++i]);
@@ -42,7 +42,7 @@ export function resolveRoots(args) {
       const next = args[i + 1];
       if (!next || next.startsWith("-")) {
         console.error(`Error: ${args[i]} requires a mode argument`);
-        console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor] [options]");
+        console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor|validate-integration] [options]");
         process.exit(1);
       }
       enforcementMode = args[++i];
@@ -223,13 +223,13 @@ function sameEntrypointPath(left, right) {
 const isMain = process.argv[1] && sameEntrypointPath(process.argv[1], resolve(__dirname, "repo-guard.mjs"));
 
 if (isMain) {
-  const MODES = new Set(["check-diff", "check-pr", "init", "doctor"]);
+  const MODES = new Set(["check-diff", "check-pr", "init", "doctor", "validate-integration"]);
   const roots = resolveRoots(process.argv.slice(2));
   const command = roots.args[0];
 
   if (command && !MODES.has(command) && command.startsWith("-")) {
     console.error(`Unknown option: ${command}`);
-    console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor] [options]");
+    console.error("Usage: repo-guard [--repo-root <path>] [--enforcement <advisory|blocking>] [check-diff|check-pr|init|doctor|validate-integration] [options]");
     process.exit(1);
   }
 
@@ -245,9 +245,19 @@ if (isMain) {
     const { runInit } = await import("./init.mjs");
     runInit(roots, roots.args);
   } else if (command === "doctor") {
-    const { runDoctor } = await import("./doctor.mjs");
-    const report = runDoctor(roots);
-    process.exit(report.fails > 0 ? 1 : 0);
+    roots.args = roots.args.slice(1);
+    if (roots.args.includes("--integration")) {
+      const { runValidateIntegration } = await import("./integration-validator.mjs");
+      runValidateIntegration(roots, roots.args);
+    } else {
+      const { runDoctor } = await import("./doctor.mjs");
+      const report = runDoctor(roots);
+      process.exit(report.fails > 0 ? 1 : 0);
+    }
+  } else if (command === "validate-integration") {
+    roots.args = roots.args.slice(1);
+    const { runValidateIntegration } = await import("./integration-validator.mjs");
+    runValidateIntegration(roots, roots.args);
   } else {
     runValidate(roots, roots.args);
   }

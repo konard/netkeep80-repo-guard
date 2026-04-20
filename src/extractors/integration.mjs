@@ -85,6 +85,7 @@ function collectWorkflowFacts(entry, content) {
   const stepInputs = [];
   const envVars = collectEnvVars(data.env, "workflow");
   const ifConditions = [];
+  const runCommands = [];
   const summaryPublishing = [];
   const jobPermissions = [];
 
@@ -145,6 +146,13 @@ function collectWorkflowFacts(entry, content) {
         });
       }
 
+      if (step.run !== undefined) {
+        runCommands.push({
+          ...stepBase,
+          run: normalizeValue(step.run),
+        });
+      }
+
       const summaryMode = detectSummaryPublishingMode(step.run);
       if (summaryMode) {
         summaryPublishing.push({
@@ -172,6 +180,7 @@ function collectWorkflowFacts(entry, content) {
     stepInputs,
     envVars,
     ifConditions,
+    runCommands,
     summaryPublishing,
   };
 }

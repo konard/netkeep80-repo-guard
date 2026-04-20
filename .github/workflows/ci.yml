@@ -47,6 +47,9 @@ jobs:
       - name: Run integration extraction tests
         run: npm run test:integration
 
+      - name: Run integration diagnostics tests
+        run: npm run test:integration-diagnostics
+
       - name: Run trace evidence rule tests
         run: npm run test:trace-evidence
 
