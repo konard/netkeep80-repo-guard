@@ -391,9 +391,10 @@
         "path": { "$ref": "#/definitions/non_empty_string" },
         "role": {
           "type": "string",
-          "minLength": 1,
-          "description": "Repository-local role for this workflow, for example repo_guard_pr_gate."
-        }
+          "enum": ["repo_guard_advisory", "repo_guard_policy_validation", "repo_guard_pr_gate"],
+          "description": "Supported repo-guard role for this workflow."
+        },
+        "profiles": { "$ref": "#/definitions/non_empty_string_array" }
       }
     },
     "integration_template": {
@@ -410,7 +411,8 @@
         "requires_contract_block": {
           "type": "boolean",
           "description": "Whether the template is expected to include a repo-guard contract block."
-        }
+        },
+        "profiles": { "$ref": "#/definitions/non_empty_string_array" }
       }
     },
     "integration_doc": {
@@ -419,8 +421,13 @@
       "additionalProperties": false,
       "properties": {
         "id": { "$ref": "#/definitions/non_empty_string" },
+        "kind": {
+          "type": "string",
+          "enum": ["markdown"]
+        },
         "path": { "$ref": "#/definitions/non_empty_string" },
-        "must_mention": { "$ref": "#/definitions/non_empty_string_array" }
+        "must_mention": { "$ref": "#/definitions/non_empty_string_array" },
+        "profiles": { "$ref": "#/definitions/non_empty_string_array" }
       }
     },
     "integration_profile": {

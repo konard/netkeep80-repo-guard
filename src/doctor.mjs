@@ -88,7 +88,11 @@ function checkPolicyDiscovery(repoRoot, packageRoot) {
     const valid = ajv.validate(schema, policy);
     if (!valid) {
       const errors = ajv.errors.map(e => `${e.instancePath || "/"} ${e.message}`).join("; ");
-      return { name: "repo-policy.json", status: FAIL, message: `Schema validation failed: ${errors}`, hint: "Fix the policy to match the schema — see schemas/repo-policy.schema.json" };
+      const integrationErrors = compileIntegrationPolicy(policy);
+      const integrationDetails = integrationErrors.length > 0
+        ? `; Invalid integration policy: ${integrationErrors.map(e => e.message).join("; ")}`
+        : "";
+      return { name: "repo-policy.json", status: FAIL, message: `Schema validation failed: ${errors}${integrationDetails}`, hint: "Fix the policy to match the schema — see schemas/repo-policy.schema.json" };
     }
 
     const regexErrors = compileForbidRegex(policy.content_rules || []);
@@ -106,7 +110,7 @@ function checkPolicyDiscovery(repoRoot, packageRoot) {
     const integrationErrors = compileIntegrationPolicy(policy);
     if (integrationErrors.length > 0) {
       const details = integrationErrors.map(e => e.message).join("; ");
-      return { name: "repo-policy.json", status: FAIL, message: `Invalid integration policy: ${details}`, hint: "Fix duplicate integration ids in repo-policy.json" };
+      return { name: "repo-policy.json", status: FAIL, message: `Invalid integration policy: ${details}`, hint: "Fix integration ids, kinds, roles, required fields, and profile references in repo-policy.json" };
     }
 
     return { name: "repo-policy.json", status: PASS, message: `Valid (${policy.repository_kind}, format ${policy.policy_format_version})` };

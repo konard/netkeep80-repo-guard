@@ -257,18 +257,278 @@ export function compileAnchorPolicy(policy) {
   return errors;
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+const integrationSectionRules = {
+  workflows: {
+    requiredStrings: ["id", "kind", "path", "role"],
+    requiredBooleans: [],
+    requiredStringArrays: [],
+    optionalStringArrays: ["profiles"],
+    allowedFields: new Set(["id", "kind", "path", "role", "profiles"]),
+    kinds: new Set(["github_actions"]),
+    roles: new Set(["repo_guard_advisory", "repo_guard_policy_validation", "repo_guard_pr_gate"]),
+  },
+  templates: {
+    requiredStrings: ["id", "kind", "path"],
+    requiredBooleans: ["requires_contract_block"],
+    requiredStringArrays: [],
+    optionalStringArrays: ["profiles"],
+    allowedFields: new Set(["id", "kind", "path", "requires_contract_block", "profiles"]),
+    kinds: new Set(["github_issue_form", "markdown"]),
+  },
+  docs: {
+    requiredStrings: ["id", "path"],
+    optionalStrings: ["kind"],
+    requiredBooleans: [],
+    requiredStringArrays: ["must_mention"],
+    optionalStringArrays: ["profiles"],
+    allowedFields: new Set(["id", "kind", "path", "must_mention", "profiles"]),
+    kinds: new Set(["markdown"]),
+  },
+  profiles: {
+    requiredStrings: ["id", "doc_path"],
+    requiredBooleans: [],
+    requiredStringArrays: [],
+    optionalStringArrays: [],
+    allowedFields: new Set(["id", "doc_path"]),
+  },
+};
+
+function formatAllowed(values) {
+  return [...values].sort().join(", ");
+}
+
+function compileIntegrationError(section, index, field, message, extra = {}) {
+  return {
+    section,
+    ...(index !== null && index !== undefined ? { index } : {}),
+    ...(field ? { field } : {}),
+    ...extra,
+    message,
+  };
+}
+
+function hasNonEmptyString(entry, field) {
+  return typeof entry[field] === "string" && entry[field].trim().length > 0;
+}
+
+function validateIntegrationString(errors, section, index, entry, field, { required = true } = {}) {
+  if (!Object.hasOwn(entry, field)) {
+    if (required) {
+      errors.push(compileIntegrationError(
+        section,
+        index,
+        field,
+        `integration.${section}[${index}].${field} is required`
+      ));
+    }
+    return false;
+  }
+
+  if (!hasNonEmptyString(entry, field)) {
+    errors.push(compileIntegrationError(
+      section,
+      index,
+      field,
+      `integration.${section}[${index}].${field} is required and must be a non-empty string`,
+      { value: entry[field] }
+    ));
+    return false;
+  }
+
+  return true;
+}
+
+function validateIntegrationBoolean(errors, section, index, entry, field) {
+  if (!Object.hasOwn(entry, field)) {
+    errors.push(compileIntegrationError(
+      section,
+      index,
+      field,
+      `integration.${section}[${index}].${field} is required`
+    ));
+    return false;
+  }
+
+  if (typeof entry[field] !== "boolean") {
+    errors.push(compileIntegrationError(
+      section,
+      index,
+      field,
+      `integration.${section}[${index}].${field} must be a boolean`,
+      { value: entry[field] }
+    ));
+    return false;
+  }
+
+  return true;
+}
+
+function validateIntegrationStringArray(errors, section, index, entry, field, { required = true } = {}) {
+  if (!Object.hasOwn(entry, field)) {
+    if (required) {
+      errors.push(compileIntegrationError(
+        section,
+        index,
+        field,
+        `integration.${section}[${index}].${field} is required`
+      ));
+    }
+    return [];
+  }
+
+  const value = entry[field];
+  if (!Array.isArray(value)) {
+    errors.push(compileIntegrationError(
+      section,
+      index,
+      field,
+      `integration.${section}[${index}].${field} must be an array of non-empty strings`,
+      { value }
+    ));
+    return [];
+  }
+
+  const validValues = [];
+  for (const [itemIndex, item] of value.entries()) {
+    if (typeof item === "string" && item.trim().length > 0) {
+      validValues.push(item);
+      continue;
+    }
+
+    errors.push(compileIntegrationError(
+      section,
+      index,
+      field,
+      `integration.${section}[${index}].${field}[${itemIndex}] must be a non-empty string`,
+      { value: item }
+    ));
+  }
+
+  if (validValues.length === 0) {
+    errors.push(compileIntegrationError(
+      section,
+      index,
+      field,
+      `integration.${section}[${index}].${field} must contain at least one non-empty string`
+    ));
+  }
+
+  return validValues;
+}
+
 export function compileIntegrationPolicy(policy) {
   const errors = [];
   const integration = policy.integration;
 
   if (!integration) return errors;
 
-  for (const section of ["workflows", "templates", "docs", "profiles"]) {
+  if (!isPlainObject(integration)) {
+    return [compileIntegrationError(null, null, null, "integration must be an object")];
+  }
+
+  const sectionNames = Object.keys(integrationSectionRules);
+  const profileReferences = [];
+  const profileIds = new Set();
+  const globalIds = new Map();
+
+  for (const section of Object.keys(integration)) {
+    if (!Object.hasOwn(integrationSectionRules, section)) {
+      errors.push(compileIntegrationError(
+        section,
+        null,
+        null,
+        `integration.${section} is not supported; use ${sectionNames.join(", ")}`
+      ));
+    }
+  }
+
+  for (const section of sectionNames) {
+    const rules = integrationSectionRules[section];
     const seen = new Map();
-    const entries = Array.isArray(integration[section]) ? integration[section] : [];
+    const sectionValue = integration[section];
+    if (sectionValue === undefined) continue;
+
+    if (!Array.isArray(sectionValue)) {
+      errors.push(compileIntegrationError(
+        section,
+        null,
+        null,
+        `integration.${section} must be an array`
+      ));
+      continue;
+    }
+
+    const entries = sectionValue;
     for (const [index, entry] of entries.entries()) {
-      if (!entry || typeof entry !== "object") continue;
-      if (!entry.id) continue;
+      if (!isPlainObject(entry)) {
+        errors.push(compileIntegrationError(
+          section,
+          index,
+          null,
+          `integration.${section}[${index}] must be an object`
+        ));
+        continue;
+      }
+
+      for (const field of Object.keys(entry)) {
+        if (!rules.allowedFields.has(field)) {
+          errors.push(compileIntegrationError(
+            section,
+            index,
+            field,
+            `integration.${section}[${index}].${field} is not supported`
+          ));
+        }
+      }
+
+      for (const field of rules.requiredStrings || []) {
+        validateIntegrationString(errors, section, index, entry, field);
+      }
+
+      for (const field of rules.optionalStrings || []) {
+        validateIntegrationString(errors, section, index, entry, field, { required: false });
+      }
+
+      for (const field of rules.requiredBooleans || []) {
+        validateIntegrationBoolean(errors, section, index, entry, field);
+      }
+
+      for (const field of rules.requiredStringArrays || []) {
+        validateIntegrationStringArray(errors, section, index, entry, field);
+      }
+
+      for (const field of rules.optionalStringArrays || []) {
+        const references = validateIntegrationStringArray(errors, section, index, entry, field, { required: false });
+        for (const profileId of references) {
+          profileReferences.push({ section, index, field, profileId });
+        }
+      }
+
+      if (rules.kinds && hasNonEmptyString(entry, "kind") && !rules.kinds.has(entry.kind)) {
+        errors.push(compileIntegrationError(
+          section,
+          index,
+          "kind",
+          `integration.${section}[${index}].kind must be one of ${formatAllowed(rules.kinds)}`,
+          { value: entry.kind }
+        ));
+      }
+
+      if (rules.roles && hasNonEmptyString(entry, "role") && !rules.roles.has(entry.role)) {
+        errors.push(compileIntegrationError(
+          section,
+          index,
+          "role",
+          `integration.${section}[${index}].role must be one of ${formatAllowed(rules.roles)}`,
+          { value: entry.role }
+        ));
+      }
+
+      if (!hasNonEmptyString(entry, "id")) continue;
 
       if (seen.has(entry.id)) {
         errors.push({
@@ -280,7 +540,38 @@ export function compileIntegrationPolicy(policy) {
       } else {
         seen.set(entry.id, index);
       }
+
+      if (globalIds.has(entry.id)) {
+        const previous = globalIds.get(entry.id);
+        if (previous.section !== section) {
+          errors.push({
+            section,
+            id: entry.id,
+            index,
+            previous_section: previous.section,
+            previous_index: previous.index,
+            message: `integration.${section}[${index}].id duplicates integration.${previous.section}[${previous.index}].id "${entry.id}"`,
+          });
+        }
+      } else {
+        globalIds.set(entry.id, { section, index });
+      }
+
+      if (section === "profiles") {
+        profileIds.add(entry.id);
+      }
     }
+  }
+
+  for (const reference of profileReferences) {
+    if (profileIds.has(reference.profileId)) continue;
+    errors.push(compileIntegrationError(
+      reference.section,
+      reference.index,
+      reference.field,
+      `integration.${reference.section}[${reference.index}].${reference.field} references unknown integration.profiles id "${reference.profileId}"`,
+      { profile_id: reference.profileId }
+    ));
   }
 
   return errors;

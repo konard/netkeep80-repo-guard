@@ -347,6 +347,7 @@ describe("integration policy compilation", () => {
             kind: "github_actions",
             path: ".github/workflows/repo-guard.yml",
             role: "repo_guard_pr_gate",
+            profiles: ["requirements-strict"],
           },
         ],
         templates: [
@@ -355,13 +356,16 @@ describe("integration policy compilation", () => {
             kind: "markdown",
             path: ".github/PULL_REQUEST_TEMPLATE.md",
             requires_contract_block: true,
+            profiles: ["requirements-strict"],
           },
         ],
         docs: [
           {
             id: "readme",
+            kind: "markdown",
             path: "README.md",
             must_mention: ["repo-guard"],
+            profiles: ["requirements-strict"],
           },
         ],
         profiles: [
@@ -389,7 +393,7 @@ describe("integration policy compilation", () => {
             id: "pr-gate",
             kind: "github_actions",
             path: ".github/workflows/repo-guard-advisory.yml",
-            role: "repo_guard_advisory",
+            role: "repo_guard_pr_gate",
           },
         ],
       },
@@ -399,13 +403,147 @@ describe("integration policy compilation", () => {
     assert.ok(errors[0].message.includes("duplicates"));
   });
 
-  it("leaves malformed integration shapes to schema validation", () => {
+  it("rejects duplicate ids across integration sections", () => {
     const errors = compileIntegrationPolicy({
       integration: {
-        workflows: [null, "invalid"],
+        workflows: [
+          {
+            id: "repo-guard",
+            kind: "github_actions",
+            path: ".github/workflows/repo-guard.yml",
+            role: "repo_guard_pr_gate",
+          },
+        ],
+        templates: [
+          {
+            id: "repo-guard",
+            kind: "markdown",
+            path: ".github/PULL_REQUEST_TEMPLATE.md",
+            requires_contract_block: true,
+          },
+        ],
       },
     });
-    assert.equal(errors.length, 0);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].section, "templates");
+    assert.ok(errors[0].message.includes("duplicates"));
+    assert.ok(errors[0].message.includes("integration.workflows[0].id"));
+  });
+
+  it("rejects malformed integration shapes and missing required fields during compilation", () => {
+    const errors = compileIntegrationPolicy({
+      integration: {
+        workflows: "not-an-array",
+        templates: [
+          null,
+          {
+            id: "pull-request-template",
+            kind: "markdown",
+            path: ".github/PULL_REQUEST_TEMPLATE.md",
+          },
+        ],
+        docs: [
+          {
+            id: "readme",
+            path: "",
+            must_mention: [],
+          },
+        ],
+        profiles: [
+          {
+            id: "requirements-strict",
+          },
+        ],
+      },
+    });
+
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows must be an array")));
+    assert.ok(errors.some((e) => e.message.includes("integration.templates[0] must be an object")));
+    assert.ok(errors.some((e) => e.message.includes("requires_contract_block is required")));
+    assert.ok(errors.some((e) => e.message.includes("integration.docs[0].path is required")));
+    assert.ok(errors.some((e) => e.message.includes("integration.docs[0].must_mention must contain at least one")));
+    assert.ok(errors.some((e) => e.message.includes("integration.profiles[0].doc_path is required")));
+  });
+
+  it("rejects unsupported integration kinds and workflow roles", () => {
+    const errors = compileIntegrationPolicy({
+      integration: {
+        workflows: [
+          {
+            id: "cron",
+            kind: "cron",
+            path: ".github/workflows/repo-guard.yml",
+            role: "custom_gate",
+          },
+        ],
+        templates: [
+          {
+            id: "template",
+            kind: "html",
+            path: ".github/PULL_REQUEST_TEMPLATE.md",
+            requires_contract_block: true,
+          },
+        ],
+        docs: [
+          {
+            id: "readme",
+            kind: "html",
+            path: "README.md",
+            must_mention: ["repo-guard"],
+          },
+        ],
+      },
+    });
+
+    assert.equal(errors.length, 4);
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].kind must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].role must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.templates[0].kind must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.docs[0].kind must be one of")));
+  });
+
+  it("rejects profile references that do not resolve to integration.profiles ids", () => {
+    const errors = compileIntegrationPolicy({
+      integration: {
+        workflows: [
+          {
+            id: "pr-gate",
+            kind: "github_actions",
+            path: ".github/workflows/repo-guard.yml",
+            role: "repo_guard_pr_gate",
+            profiles: ["requirements-strict", "missing-profile"],
+          },
+        ],
+        templates: [
+          {
+            id: "pull-request-template",
+            kind: "markdown",
+            path: ".github/PULL_REQUEST_TEMPLATE.md",
+            requires_contract_block: true,
+            profiles: ["missing-template-profile"],
+          },
+        ],
+        docs: [
+          {
+            id: "readme",
+            kind: "markdown",
+            path: "README.md",
+            must_mention: ["repo-guard"],
+            profiles: ["requirements-strict"],
+          },
+        ],
+        profiles: [
+          {
+            id: "requirements-strict",
+            doc_path: "docs/requirements-strict-profile.md",
+          },
+        ],
+      },
+    });
+
+    assert.equal(errors.length, 2);
+    assert.ok(errors.some((e) => e.message.includes("missing-profile")));
+    assert.ok(errors.some((e) => e.message.includes("missing-template-profile")));
   });
 });
 

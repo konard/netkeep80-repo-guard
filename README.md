@@ -284,6 +284,18 @@ contract block, какие документы объясняют contract/profil
 перечисленные YAML/Markdown-файлы и строит normalized facts, но не применяет
 их как runtime enforcement rules.
 
+Во время компиляции политики `repo-guard` проверяет, что ids уникальны во всей
+`integration` секции, обязательные поля заполнены, workflow/template/doc kinds
+и workflow roles известны, а поля `profiles` ссылаются на объявленные
+`integration.profiles[].id`. Сейчас поддерживаются:
+
+| Поле | Допустимые значения |
+| --- | --- |
+| `workflows[].kind` | `github_actions` |
+| `workflows[].role` | `repo_guard_pr_gate`, `repo_guard_advisory`, `repo_guard_policy_validation` |
+| `templates[].kind` | `markdown`, `github_issue_form` |
+| `docs[].kind` | `markdown` |
+
 `buildPolicyFacts(...).integration` содержит:
 
 | Факт | Что извлекается |
@@ -304,7 +316,8 @@ contract block, какие документы объясняют contract/profil
         "id": "pr-gate",
         "kind": "github_actions",
         "path": ".github/workflows/repo-guard.yml",
-        "role": "repo_guard_pr_gate"
+        "role": "repo_guard_pr_gate",
+        "profiles": ["requirements-strict"]
       }
     ],
     "templates": [
@@ -312,14 +325,17 @@ contract block, какие документы объясняют contract/profil
         "id": "pull-request-template",
         "kind": "markdown",
         "path": ".github/PULL_REQUEST_TEMPLATE.md",
-        "requires_contract_block": true
+        "requires_contract_block": true,
+        "profiles": ["requirements-strict"]
       }
     ],
     "docs": [
       {
         "id": "readme",
+        "kind": "markdown",
         "path": "README.md",
-        "must_mention": ["repo-guard", "anchors.affects"]
+        "must_mention": ["repo-guard", "anchors.affects"],
+        "profiles": ["requirements-strict"]
       }
     ],
     "profiles": [

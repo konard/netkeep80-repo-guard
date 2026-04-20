@@ -96,6 +96,7 @@ const policyWithIntegration = {
         kind: "github_actions",
         path: ".github/workflows/repo-guard.yml",
         role: "repo_guard_pr_gate",
+        profiles: ["requirements-strict"],
       },
     ],
     templates: [
@@ -104,13 +105,16 @@ const policyWithIntegration = {
         kind: "markdown",
         path: ".github/PULL_REQUEST_TEMPLATE.md",
         requires_contract_block: true,
+        profiles: ["requirements-strict"],
       },
     ],
     docs: [
       {
         id: "readme",
+        kind: "markdown",
         path: "README.md",
         must_mention: ["repo-guard", "anchors.affects"],
+        profiles: ["requirements-strict"],
       },
     ],
     profiles: [
@@ -137,6 +141,36 @@ const invalidIntegrationPolicy = {
   },
 };
 expect("policy with unknown integration workflow kind fails schema", validatePolicy(invalidIntegrationPolicy), false);
+
+const invalidIntegrationRolePolicy = {
+  ...validPolicy,
+  integration: {
+    workflows: [
+      {
+        id: "pr-gate",
+        kind: "github_actions",
+        path: ".github/workflows/repo-guard.yml",
+        role: "custom_gate",
+      },
+    ],
+  },
+};
+expect("policy with unknown integration workflow role fails schema", validatePolicy(invalidIntegrationRolePolicy), false);
+
+const invalidIntegrationDocKindPolicy = {
+  ...validPolicy,
+  integration: {
+    docs: [
+      {
+        id: "readme",
+        kind: "html",
+        path: "README.md",
+        must_mention: ["repo-guard"],
+      },
+    ],
+  },
+};
+expect("policy with unknown integration doc kind fails schema", validatePolicy(invalidIntegrationDocKindPolicy), false);
 
 // Content rules normalization tests
 const oldFormPolicy = loadJSON(resolve(root, "tests/fixtures/invalid-content-rule-old-form.json"));

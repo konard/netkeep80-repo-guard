@@ -57,7 +57,7 @@ function validPolicy() {
   });
 }
 
-function runDoctor(args = "", opts = {}) {
+function runRepoGuard(args = "", opts = {}) {
   const cmd = `node ${resolve(projectRoot, "src/repo-guard.mjs")} ${args}`;
   try {
     const stdout = execSync(cmd, { encoding: "utf-8", cwd: opts.cwd || projectRoot, stdio: ["pipe", "pipe", "pipe"] });
@@ -65,6 +65,10 @@ function runDoctor(args = "", opts = {}) {
   } catch (e) {
     return { stdout: e.stdout || "", stderr: e.stderr || "", code: e.status };
   }
+}
+
+function runDoctor(args = "", opts = {}) {
+  return runRepoGuard(args, opts);
 }
 
 // --- self-hosting: doctor runs on this repo ---
@@ -144,6 +148,46 @@ console.log("\n--- schema-invalid repo-policy.json ---");
   expect("exit code 1 for invalid schema", code, 1);
   expectIncludes("policy FAIL with schema error", stdout, "FAIL: repo-policy.json");
   expectIncludes("mentions schema validation", stdout, "Schema validation failed");
+}
+
+// --- integration compile diagnostics surface through validate and doctor ---
+
+console.log("\n--- integration compile diagnostics surface through validate and doctor ---");
+{
+  const dir = makeTmpDir();
+  initGitRepo(dir);
+  writeFileSync(resolve(dir, "repo-policy.json"), JSON.stringify({
+    policy_format_version: "0.3.0",
+    repository_kind: "tooling",
+    integration: {
+      workflows: [
+        {
+          id: "pr-gate",
+          kind: "github_actions",
+          path: ".github/workflows/repo-guard.yml",
+          role: "custom_gate",
+          profiles: ["missing-profile"],
+        },
+      ],
+      profiles: [],
+    },
+    paths: { forbidden: [], canonical_docs: ["README.md"], governance_paths: ["repo-policy.json"] },
+    diff_rules: { max_new_docs: 2, max_new_files: 15 },
+    content_rules: [],
+    cochange_rules: [],
+  }));
+
+  const validate = runRepoGuard(`--repo-root ${dir}`);
+  expect("validate exit code 1 for invalid integration", validate.code, 1);
+  expectIncludes("validate reports integration compilation", validate.stderr, "FAIL: integration policy compilation");
+  expectIncludes("validate reports unknown workflow role", validate.stderr, "role must be one of");
+  expectIncludes("validate reports missing profile reference", validate.stderr, "missing-profile");
+
+  const doctor = runDoctor(`--repo-root ${dir} doctor`);
+  expect("doctor exit code 1 for invalid integration", doctor.code, 1);
+  expectIncludes("doctor reports invalid integration policy", doctor.stdout, "Invalid integration policy");
+  expectIncludes("doctor reports unknown workflow role", doctor.stdout, "role must be one of");
+  expectIncludes("doctor reports missing profile reference", doctor.stdout, "missing-profile");
 }
 
 // --- not a git repo ---
