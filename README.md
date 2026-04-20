@@ -289,7 +289,7 @@ jobs:
 
 | Поле | Поведение сейчас |
 | --- | --- |
-| `paths.governance_paths` | Документирует управляющие файлы, но не применяется как правило |
+| `paths.governance_paths` | Блокирует правки перечисленных файлов управления, пока контракт не укажет `authorized_governance_paths` и этот контракт не будет извлечён из связанного issue (см. раздел «Санкционирование изменений политики») |
 | `paths.public_api` | Зарезервировано; непустое значение дает предупреждение |
 | `contract.overrides` | Зарезервировано; непустое значение дает предупреждение |
 
@@ -735,6 +735,29 @@ repo-guard doctor --integration --format summary
 `.github/ISSUE_TEMPLATE/`, `templates/` и `action.yml`. Они не являются
 служебными исключениями и должны проходить обычную проверку политики PR.
 
+### Санкционирование изменений политики
+
+Семейство правил `governance-paths` блокирует любые правки файлов из
+`paths.governance_paths`, если в `change_contract` связанного issue не
+перечислены соответствующие пути в `authorized_governance_paths`. Контракт,
+размещённый только в теле PR, намеренно отвергается: иначе ИИ-агент мог бы в
+одном PR и изменить политику, и одновременно разрешить это изменение себе. Чтобы
+правка политики прошла, её нужно явно одобрить в описании issue (где контракт
+авторизован человеком), например:
+
+```repo-guard-yaml
+change_type: feature
+scope:
+  - repo-policy.json
+budgets: {}
+authorized_governance_paths:
+  - repo-policy.json
+must_touch: []
+must_not_touch: []
+expected_effects:
+  - Relax max-source-file-lines limit to 1200
+```
+
 CI также запускает:
 
 - `npx repo-guard` — валидацию политики;
@@ -785,8 +808,8 @@ node src/repo-guard.mjs check-diff --format summary
 - `repo-guard` не оставляет комментарии в PR.
 - `check-diff --contract` читает JSON-файл; YAML-контракт поддерживается в
   Markdown-блоках PR или issue.
-- `paths.governance_paths`, `paths.public_api` и `contract.overrides` не
-  изменяют поведение применения правил.
+- `paths.public_api` и `contract.overrides` не изменяют поведение применения
+  правил.
 - `integration` извлекает факты из workflow, template, docs и profile files,
   но не применяет их как blocking enforcement.
 - Проверки работают по git diff и метаданным политики; корректность продукта

@@ -59,6 +59,7 @@ const facts = {
       forbidden: ["secrets/**"],
       canonical_docs: ["docs/canonical.md"],
       operational_paths: [".gitkeep"],
+      governance_paths: ["repo-policy.json"],
     },
     diff_rules: {
       max_new_docs: 2,
@@ -187,6 +188,7 @@ expect(
 
 for (const name of [
   "forbidden-paths",
+  "governance-change-authorization",
   "canonical-docs-budget",
   "max-new-files",
   "max-net-added-lines",

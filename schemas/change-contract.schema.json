@@ -98,6 +98,12 @@
         }
       }
     },
+    "authorized_governance_paths": {
+      "type": "array",
+      "description": "Glob patterns listing governance files the change is sanctioned to modify. Must be present in the contract carried by the linked issue body to unlock changes to policy.paths.governance_paths; a PR-body-only authorization is rejected so an AI agent cannot self-authorize bypassing the repository policy.",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
     "must_touch": {
       "type": "array",
       "items": { "type": "string" },

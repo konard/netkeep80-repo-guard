@@ -90,7 +90,7 @@
         "governance_paths": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Canonical list of paths that define repository governance. Informational only; not enforced at runtime. Used to document which files control policy."
+          "description": "Canonical list of paths that define repository governance. Changes to files that match any pattern here require the contract to declare matching authorized_governance_paths, and that contract must be carried by the linked issue body so the change is sanctioned outside the PR an AI agent can author."
         },
         "operational_paths": {
           "type": "array",
