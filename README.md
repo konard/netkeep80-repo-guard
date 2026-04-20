@@ -91,6 +91,7 @@ repo-guard doctor
 | `repo-guard check-pr` | Проверяет PR внутри рабочего процесса GitHub Actions `pull_request` |
 | `repo-guard init` | Создает стартовую политику, рабочий процесс и шаблоны |
 | `repo-guard doctor` | Диагностирует окружение, рабочий процесс, политику и авторизацию |
+| `repo-guard validate-integration` | Проверяет integration wiring через normalized facts |
 
 Глобальные флаги можно ставить до или после команды:
 
@@ -306,6 +307,23 @@ contract block, какие документы объясняют contract/profil
 | `profiles` | Идентификаторы профилей, migration target mentions и ссылки на имя профиля |
 | `errors` | Явные ошибки чтения, malformed YAML, malformed contract blocks и незакрытые Markdown fences |
 
+Проверить integration layer как отдельный продуктовый diagnostic:
+
+```bash
+repo-guard validate-integration
+repo-guard validate-integration --format json
+repo-guard validate-integration --format summary
+repo-guard --enforcement advisory validate-integration --format summary
+repo-guard doctor --integration --format json
+```
+
+`validate-integration` читает только файлы репозитория, объявленные в
+`repo-policy.json`, и не требует `GITHUB_EVENT_PATH`. В blocking-режиме
+диагностические нарушения дают код выхода 1; в advisory-режиме они остаются в
+JSON/summary как violations, но код выхода остается 0. JSON-вывод содержит
+normalized `integration` facts, `ruleResults`, `violations`, `diagnostics` и
+итоговый `exitCode`.
+
 Пример:
 
 ```json
@@ -474,6 +492,7 @@ expected_effects:
 ```bash
 repo-guard doctor
 repo-guard --repo-root /path/to/repo doctor
+repo-guard doctor --integration --format summary
 ```
 
 `doctor` проверяет:
@@ -492,6 +511,10 @@ repo-guard --repo-root /path/to/repo doctor
 Локально отсутствие `GITHUB_EVENT_PATH` обычно дает предупреждение, потому что
 `check-pr` нужен только внутри GitHub Actions.
 
+`doctor --integration` запускает тот же встроенный diagnostic engine, что и
+`validate-integration`, но оставляет привычный doctor UX для пользователей,
+которые хотят проверить только integration wiring.
+
 ## Самопроверка репозитория
 
 Этот репозиторий проверяет сам себя через локальный переиспользуемый Action `uses: ./` в
@@ -505,6 +528,10 @@ repo-guard --repo-root /path/to/repo doctor
 CI также запускает тестовый сценарий `advisory` для `check-diff`, чтобы
 проверять, что нарушения в режиме `advisory` видны в выводе, но не ломают
 задание.
+
+Собственный integration profile этого репозитория называется `self-hosting`;
+он документирует профиль, при котором `repo-guard` проверяет собственную
+политику, workflow, шаблоны и README как downstream-интеграцию.
 
 ## Разработка
 
