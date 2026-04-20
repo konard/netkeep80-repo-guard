@@ -27,6 +27,15 @@ function expectIncludes(label, str, substring) {
   }
 }
 
+function expectNotIncludes(label, str, substring) {
+  const passed = !str.includes(substring);
+  console.log(`${passed ? "PASS" : "FAIL"}: ${label}`);
+  if (!passed) {
+    failures++;
+    console.error(`  expected not to include: ${JSON.stringify(substring)}`);
+  }
+}
+
 function makeTmpDir() {
   return mkdtempSync(join(tmpdir(), "repo-guard-init-"));
 }
@@ -37,6 +46,8 @@ function runInit(args = "", cwd) {
 }
 
 const policySchema = JSON.parse(readFileSync(resolve(projectRoot, "schemas/repo-policy.schema.json"), "utf-8"));
+const packageJson = JSON.parse(readFileSync(resolve(projectRoot, "package.json"), "utf-8"));
+const defaultActionRef = `v${packageJson.version}`;
 const ajv = new Ajv({ allErrors: true });
 const validatePolicy = ajv.compile(policySchema);
 
@@ -145,7 +156,8 @@ console.log("\n--- workflow content ---");
   const dir = makeTmpDir();
   runInit(`--repo-root ${dir} init`);
   const workflow = readFileSync(join(dir, ".github/workflows/repo-guard.yml"), "utf-8");
-  expectIncludes("workflow uses repo-guard action", workflow, "netkeep80/repo-guard@main");
+  expectIncludes("workflow uses pinned repo-guard action", workflow, `netkeep80/repo-guard@${defaultActionRef}`);
+  expectNotIncludes("workflow does not use moving main ref", workflow, "netkeep80/repo-guard@main");
   expectIncludes("workflow uses check-pr", workflow, "mode: check-pr");
   expectIncludes("workflow uses blocking enforcement", workflow, "enforcement: blocking");
   expectIncludes("workflow has fetch-depth 0", workflow, "fetch-depth: 0");

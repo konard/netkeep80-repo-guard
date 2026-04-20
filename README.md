@@ -48,6 +48,10 @@ repo-guard init --preset application --mode advisory
 | `.github/PULL_REQUEST_TEMPLATE.md` | Шаблон PR с контрактом изменения |
 | `.github/ISSUE_TEMPLATE/change-contract.yml` | Шаблон issue с контрактом изменения |
 
+Сгенерированный workflow pin-ит Action на release tag установленной версии
+`repo-guard` (`netkeep80/repo-guard@v<version>`), а не на ветку `main`.
+При обновлении инструмента меняйте этот ref на новый release tag осознанно.
+
 Пресеты:
 
 | Пресет | Для чего | Базовые ограничения |
@@ -198,7 +202,8 @@ jobs:
         run: echo "### repo-guard" >> "$GITHUB_STEP_SUMMARY"
 ```
 
-Используйте тег релиза вместо `vX.Y.Z` для воспроизводимых запусков. При
+Используйте тег релиза вместо `vX.Y.Z` для воспроизводимых запусков.
+`repo-guard init` заполняет этот ref тегом версии установленного пакета. При
 локальной самопроверке внутри этого репозитория рабочий процесс может
 использовать `uses: ./`.
 
