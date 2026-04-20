@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Ajv from "ajv";
-import { ajvErrors } from "../enforcement.mjs";
 import {
   compileAnchorPolicy,
   compileForbidRegex,
@@ -19,6 +18,10 @@ export function loadJSON(path) {
 
 export function createAjv() {
   return new Ajv({ allErrors: true });
+}
+
+export function ajvErrors(errors) {
+  return (errors || []).map((err) => `${err.instancePath || "/"} ${err.message}`);
 }
 
 export function validate(ajv, schema, data, label, options = {}) {

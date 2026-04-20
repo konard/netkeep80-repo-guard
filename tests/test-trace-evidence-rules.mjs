@@ -84,11 +84,11 @@ console.log("\n--- changed requirement files require evidence ---");
   expect("requirement-only diff fails", result.ok, false);
   expect("requirement-only diff sets blocking exit code", result.exitCode, 1);
 
-  const violation = result.violations.find((item) => item.trace_rule === "changed-requirements-need-evidence");
+  const violation = result.violations.find((item) => item.data?.trace_rule === "changed-requirements-need-evidence");
   expect("missing evidence violation is reported as a trace rule", Boolean(violation), true);
-  expect("missing evidence violation has evidence trace kind", violation?.trace_kind, "changed_files_require_evidence");
-  expect("missing evidence violation keeps changed requirement path", violation?.changed_files, ["requirements/fr-001.json"]);
-  expect("missing evidence violation keeps required evidence surfaces", violation?.must_touch_any, evidenceSurfaces);
+  expect("missing evidence violation has evidence trace kind", violation?.data?.trace_kind, "changed_files_require_evidence");
+  expect("missing evidence violation keeps changed requirement path", violation?.data?.changed_files, ["requirements/fr-001.json"]);
+  expect("missing evidence violation keeps required evidence surfaces", violation?.data?.must_touch_any, evidenceSurfaces);
   expectIncludes("missing evidence message is distinct", violation?.message, "missing evidence");
 }
 
@@ -153,11 +153,11 @@ console.log("\n--- declared contract anchors require evidence ---");
   const result = runTracePolicy({ traceRules, diffText: missingEvidenceDiff, contract });
 
   expect("declared affects without evidence fails", result.ok, false);
-  const violation = result.violations.find((item) => item.trace_rule === "declared-anchors-need-evidence");
+  const violation = result.violations.find((item) => item.data?.trace_rule === "declared-anchors-need-evidence");
   expect("declared anchor evidence violation is reported", Boolean(violation), true);
-  expect("declared anchor evidence violation has distinct kind", violation?.trace_kind, "declared_anchors_require_evidence");
-  expect("declared anchor evidence violation keeps contract field", violation?.contract_field, "anchors.affects");
-  expect("declared anchor evidence violation keeps declared anchors", violation?.declared_anchors, ["FR-001"]);
+  expect("declared anchor evidence violation has distinct kind", violation?.data?.trace_kind, "declared_anchors_require_evidence");
+  expect("declared anchor evidence violation keeps contract field", violation?.data?.contract_field, "anchors.affects");
+  expect("declared anchor evidence violation keeps declared anchors", violation?.data?.declared_anchors, ["FR-001"]);
   expectIncludes("declared anchor evidence message is distinct", violation?.message, "missing evidence");
 }
 

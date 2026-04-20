@@ -235,7 +235,7 @@ console.log("\n--- profile trace rules enforce changed requirement evidence ---"
   expect("changed requirement without evidence is blocking", result.exitCode, 1);
   expectIncludes(
     "profile trace rule reports missing evidence",
-    result.violations.find((item) => item.trace_rule === "changed-requirements-need-evidence")?.message,
+    result.violations.find((item) => item.data?.trace_rule === "changed-requirements-need-evidence")?.message,
     "missing evidence"
   );
 }

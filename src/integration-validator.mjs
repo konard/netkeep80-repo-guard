@@ -3,14 +3,18 @@ import {
   compileIntegrationPolicy,
 } from "./policy-compiler.mjs";
 import {
-  ajvErrors,
-  createCheckReporter,
   resolveEnforcementMode,
 } from "./enforcement.mjs";
 import {
+  ajvErrors,
   createAjv,
   loadJSON,
 } from "./runtime/validation.mjs";
+import { createAnalysisCollector } from "./runtime/analysis-report.mjs";
+import {
+  createAnalysisTextPresenter,
+  renderAnalysisReport,
+} from "./reporting/renderers.mjs";
 import { extractIntegration } from "./extractors/integration.mjs";
 
 const FORMATS = new Set(["text", "json", "summary"]);
@@ -501,60 +505,7 @@ function profileDiagnostics(integration) {
   return details;
 }
 
-function renderMarkdownTableCell(value) {
-  return String(value || "")
-    .replaceAll("|", "\\|")
-    .replaceAll("\n", "<br>");
-}
-
-function detailsForSummary(diagnostic) {
-  const details = [];
-  if (diagnostic.message) details.push(diagnostic.message);
-  if (diagnostic.details) details.push(...diagnostic.details);
-  if (diagnostic.errors) details.push(...diagnostic.errors);
-  if (diagnostic.hint) details.push(`hint: ${diagnostic.hint}`);
-  return details.length > 0 ? details.join("<br>") : "Diagnostic reported";
-}
-
-export function renderIntegrationSummary(report) {
-  const declared = report.diagnostics.declared;
-  const extracted = report.diagnostics.extracted;
-  const lines = [
-    "## repo-guard integration summary",
-    "",
-    `- Result: ${report.result}`,
-    `- Mode: ${report.mode}`,
-    `- Repository root: \`${report.repositoryRoot}\``,
-    `- Declared: ${declared.workflows} workflow(s), ${declared.templates} template(s), ${declared.docs} doc(s), ${declared.profiles} profile(s)`,
-    `- Extracted: ${extracted.workflows} workflow(s), ${extracted.templates} template(s), ${extracted.docs} doc(s), ${extracted.profiles} profile(s), ${extracted.errors} artifact error(s)`,
-    `- Diagnostics: ${report.passed} passed, ${report.failed} failed${report.mode === "advisory" ? `, ${report.violationCount} advisory violation(s)` : ""}, ${report.warnings} warning(s)`,
-  ];
-
-  if (report.violations.length > 0) {
-    lines.push("", "| Diagnostic | Details |", "|---|---|");
-    for (const violation of report.violations) {
-      lines.push(`| ${renderMarkdownTableCell(violation.rule)} | ${renderMarkdownTableCell(detailsForSummary(violation))} |`);
-    }
-  }
-
-  if (report.advisoryWarnings.length > 0) {
-    lines.push("", "| Advisory | Details |", "|---|---|");
-    for (const warning of report.advisoryWarnings) {
-      lines.push(`| ${renderMarkdownTableCell(warning.rule)} | ${renderMarkdownTableCell(detailsForSummary(warning))} |`);
-    }
-  }
-
-  if (report.hints.length > 0) {
-    lines.push("", "### Hints");
-    for (const hint of report.hints) {
-      lines.push(`- ${hint.rule}: ${hint.message}`);
-    }
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function createReport(roots, { format }) {
+export function createIntegrationAnalysisReport(roots, { format }) {
   const policyPath = resolve(roots.repoRoot, "repo-policy.json");
   const schemaPath = resolve(roots.packageRoot, "schemas/repo-policy.schema.json");
   let policy = null;
@@ -587,7 +538,9 @@ function createReport(roots, { format }) {
     console.log("repo-guard validate-integration\n");
   }
 
-  const reporter = createCheckReporter(enforcement.mode, { quiet });
+  const reporter = createAnalysisCollector(enforcement, {
+    presenter: quiet ? null : createAnalysisTextPresenter(),
+  });
   const diagnostics = {
     declared: countDeclared(policy?.integration),
     extracted: countExtracted(emptyIntegrationFacts()),
@@ -729,17 +682,14 @@ export function runValidateIntegration(roots, args = []) {
     process.exit(1);
   }
 
-  const report = createReport(roots, { format: parsed.format });
+  const report = createIntegrationAnalysisReport(roots, { format: parsed.format });
   if (report.fatal) {
     console.error(report.message);
     process.exit(1);
   }
 
-  if (parsed.format === "json") {
-    console.log(JSON.stringify(report, null, 2));
-  } else if (parsed.format === "summary") {
-    console.log(renderIntegrationSummary(report));
-  }
+  const output = renderAnalysisReport(report, { format: parsed.format });
+  if (output) console.log(output);
 
   process.exit(report.exitCode);
 }

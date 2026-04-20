@@ -216,7 +216,7 @@ console.log("\n--- anchor extraction errors are predictable and reported by pipe
   const violation = result.violations.find((item) => item.rule === "anchor-extraction");
   expect("pipeline reports anchor extraction as a policy violation", Boolean(violation), true);
   expect("pipeline exposes formatted extraction errors",
-    violation?.errors.some((error) => error.includes("requirements/bad.json")),
+    violation?.details.some((detail) => detail.includes("requirements/bad.json")),
     true);
 }
 
@@ -292,16 +292,16 @@ console.log("\n--- must_resolve trace rules enforce code and doc anchors ---");
   expect("multiple trace rule violations coexist",
     result.violations
       .filter((violation) => violation.rule.startsWith("trace-rule:"))
-      .map((violation) => violation.trace_rule)
+      .map((violation) => violation.data?.trace_rule)
       .sort(),
     ["code-refs-must-resolve", "doc-refs-must-resolve"]);
 
-  const codeViolation = result.violations.find((violation) => violation.trace_rule === "code-refs-must-resolve");
-  const docViolation = result.violations.find((violation) => violation.trace_rule === "doc-refs-must-resolve");
-  expect("code violation lists unresolved anchor value", codeViolation?.unresolved_anchors[0]?.value, "FR-404");
-  expect("code violation lists offending source file", codeViolation?.unresolved_anchors[0]?.locations[0], "src/feature.mjs:2:9");
-  expect("doc violation lists unresolved anchor value", docViolation?.unresolved_anchors[0]?.value, "FR-405");
-  expect("doc violation lists offending source file", docViolation?.unresolved_anchors[0]?.locations[0], "docs/feature.md:1:22");
+  const codeViolation = result.violations.find((violation) => violation.data?.trace_rule === "code-refs-must-resolve");
+  const docViolation = result.violations.find((violation) => violation.data?.trace_rule === "doc-refs-must-resolve");
+  expect("code violation lists unresolved anchor value", codeViolation?.data?.unresolved_anchors?.[0]?.value, "FR-404");
+  expect("code violation lists offending source file", codeViolation?.data?.unresolved_anchors?.[0]?.locations[0], "src/feature.mjs:2:9");
+  expect("doc violation lists unresolved anchor value", docViolation?.data?.unresolved_anchors?.[0]?.value, "FR-405");
+  expect("doc violation lists offending source file", docViolation?.data?.unresolved_anchors?.[0]?.locations[0], "docs/feature.md:1:22");
   expect("resolved trace values remain visible in diagnostics",
     result.traceRuleResults.map((traceResult) => traceResult.resolved[0]?.value).sort(),
     ["FR-001", "FR-002"]);

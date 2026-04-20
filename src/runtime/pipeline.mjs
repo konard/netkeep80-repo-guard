@@ -1,15 +1,22 @@
-import { createCheckReporter, printEnforcementMode } from "../enforcement.mjs";
 import { buildPolicyFacts } from "../facts/input.mjs";
 import { runPolicyChecks } from "../checks/orchestrator.mjs";
 import { buildAnchorDiagnostics } from "../reporting/anchor-diagnostics.mjs";
+import { createAnalysisCollector } from "./analysis-report.mjs";
+import {
+  createAnalysisTextPresenter,
+  renderDiffAnalysis,
+  renderEnforcementMode,
+} from "../reporting/renderers.mjs";
 
 export function runPolicyPipeline(input, options = {}) {
   const quiet = options.quiet || false;
   if (!quiet && options.printEnforcement !== false) {
-    printEnforcementMode(input.enforcement);
+    console.log(renderEnforcementMode(input.enforcement));
   }
 
-  const reporter = createCheckReporter(input.enforcement.mode, { quiet });
+  const reporter = createAnalysisCollector(input.enforcement, {
+    presenter: quiet ? null : createAnalysisTextPresenter(),
+  });
 
   for (const initialCheck of input.initialChecks || []) {
     reporter.report(initialCheck.name, initialCheck.check);
@@ -17,14 +24,14 @@ export function runPolicyPipeline(input, options = {}) {
 
   const facts = buildPolicyFacts(input);
   if (!quiet) {
-    const skipped = facts.diagnostics.skippedOperationalFiles;
-    console.log(`\nDiff analysis: ${facts.diff.files.all.length} file(s) changed${skipped ? ` (${skipped} operational skipped)` : ""}`);
+    console.log(`\n${renderDiffAnalysis(facts)}`);
   }
 
   const anchorDiagnostics = buildAnchorDiagnostics(facts);
   runPolicyChecks(facts, reporter, { anchorDiagnostics });
 
   return reporter.finish({
+    command: input.mode,
     repositoryRoot: facts.repositoryRoot,
     diff: {
       changedFiles: facts.diff.files.all.length,
