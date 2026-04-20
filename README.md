@@ -173,6 +173,11 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
 jobs:
   policy-check:
     runs-on: ubuntu-latest
@@ -187,6 +192,10 @@ jobs:
           enforcement: blocking
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish repo-guard summary
+        if: always()
+        run: echo "### repo-guard" >> "$GITHUB_STEP_SUMMARY"
 ```
 
 Используйте тег релиза вместо `vX.Y.Z` для воспроизводимых запусков. При
@@ -282,8 +291,8 @@ jobs:
 `repo-guard`: какой workflow запускает проверку, какие шаблоны содержат
 contract block, какие документы объясняют contract/profile/anchor-практики и
 где описаны профили. Это декларативный слой политики: `repo-guard` читает
-перечисленные YAML/Markdown-файлы и строит normalized facts, но не применяет
-их как runtime enforcement rules.
+перечисленные YAML/Markdown-файлы, строит normalized facts и применяет
+`validate-integration` diagnostics к объявленным ожиданиям.
 
 Во время компиляции политики `repo-guard` проверяет, что ids уникальны во всей
 `integration` секции, обязательные поля заполнены, workflow/template/doc kinds
@@ -296,6 +305,23 @@ contract block, какие документы объясняют contract/profil
 | `workflows[].role` | `repo_guard_pr_gate`, `repo_guard_advisory`, `repo_guard_policy_validation` |
 | `templates[].kind` | `markdown`, `github_issue_form` |
 | `docs[].kind` | `markdown` |
+
+Для `workflows[].role: "repo_guard_pr_gate"` можно объявить `expect`:
+
+| Поле | Что проверяет |
+| --- | --- |
+| `events` | Обязательные GitHub Actions events, например `pull_request` |
+| `event_types` | Обязательные `pull_request.types` / `pull_request_target.types` |
+| `action.uses` | Ожидаемый Action target, например `netkeep80/repo-guard` или `./` |
+| `action.ref_pinning` | Стратегия pinning: `local`, `ref`, `tag`, `semver`, `sha` или `any` |
+| `action.ref` | Конкретный ожидаемый ref Action |
+| `mode` | Ожидаемый input `mode`, обычно `check-pr` |
+| `enforcement` | Ожидаемый input `enforcement`: `blocking` или `advisory` |
+| `permissions` | Минимальные workflow/job permissions, например `contents: read` |
+| `token_env` | Альтернативные env-переменные токена, из которых нужна хотя бы одна |
+| `required_env` | Env-переменные, которые должны присутствовать все |
+| `summary` | Требовать запись в `$GITHUB_STEP_SUMMARY` |
+| `disallow` | Запрещенные patterns: `continue_on_error`, `manual_clone`, `direct_temp_cli_execution` |
 
 `buildPolicyFacts(...).integration` содержит:
 
@@ -335,7 +361,25 @@ normalized `integration` facts, `ruleResults`, `violations`, `diagnostics` и
         "kind": "github_actions",
         "path": ".github/workflows/repo-guard.yml",
         "role": "repo_guard_pr_gate",
-        "profiles": ["requirements-strict"]
+        "profiles": ["requirements-strict"],
+        "expect": {
+          "events": ["pull_request"],
+          "event_types": ["opened", "synchronize", "reopened", "ready_for_review"],
+          "action": {
+            "uses": "netkeep80/repo-guard",
+            "ref_pinning": "semver"
+          },
+          "mode": "check-pr",
+          "enforcement": "blocking",
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read",
+            "issues": "read"
+          },
+          "token_env": ["GH_TOKEN"],
+          "summary": true,
+          "disallow": ["continue_on_error", "manual_clone", "direct_temp_cli_execution"]
+        }
       }
     ],
     "templates": [

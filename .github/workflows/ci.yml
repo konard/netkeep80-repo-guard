@@ -7,6 +7,11 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
 jobs:
   validate:
     # repo-guard's own CI is intentionally blocking: this job protects the
@@ -74,6 +79,10 @@ jobs:
           enforcement: blocking
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish repo-guard summary
+        if: always() && github.event_name == 'pull_request' && !github.event.pull_request.draft
+        run: echo "### repo-guard" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Exercise advisory policy mode
         run: |

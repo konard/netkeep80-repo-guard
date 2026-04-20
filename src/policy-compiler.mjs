@@ -267,7 +267,7 @@ const integrationSectionRules = {
     requiredBooleans: [],
     requiredStringArrays: [],
     optionalStringArrays: ["profiles"],
-    allowedFields: new Set(["id", "kind", "path", "role", "profiles"]),
+    allowedFields: new Set(["id", "kind", "path", "role", "expect", "profiles"]),
     kinds: new Set(["github_actions"]),
     roles: new Set(["repo_guard_advisory", "repo_guard_policy_validation", "repo_guard_pr_gate"]),
   },
@@ -295,6 +295,27 @@ const integrationSectionRules = {
     optionalStringArrays: [],
     allowedFields: new Set(["id", "doc_path"]),
   },
+};
+
+const workflowExpectationRules = {
+  allowedFields: new Set([
+    "events",
+    "event_types",
+    "action",
+    "mode",
+    "enforcement",
+    "permissions",
+    "token_env",
+    "required_env",
+    "summary",
+    "disallow",
+  ]),
+  actionFields: new Set(["uses", "ref", "ref_pinning"]),
+  modes: new Set(["check-pr", "check-diff"]),
+  enforcementModes: new Set(["advisory", "blocking"]),
+  permissionValues: new Set(["none", "read", "write"]),
+  refPinning: new Set(["any", "local", "ref", "tag", "semver", "sha"]),
+  disallowedPatterns: new Set(["continue_on_error", "manual_clone", "direct_temp_cli_execution"]),
 };
 
 function formatAllowed(values) {
@@ -420,6 +441,222 @@ function validateIntegrationStringArray(errors, section, index, entry, field, { 
   return validValues;
 }
 
+function integrationExpectationMessage(index, path, message) {
+  return `integration.workflows[${index}].expect.${path} ${message}`;
+}
+
+function pushWorkflowExpectationError(errors, index, path, message, extra = {}) {
+  errors.push(compileIntegrationError(
+    "workflows",
+    index,
+    `expect.${path}`,
+    integrationExpectationMessage(index, path, message),
+    extra
+  ));
+}
+
+function validateExpectationString(errors, index, source, path, { required = false, field = path } = {}) {
+  if (!Object.hasOwn(source, field)) {
+    if (required) {
+      pushWorkflowExpectationError(errors, index, path, "is required");
+    }
+    return false;
+  }
+
+  if (typeof source[field] !== "string" || source[field].trim().length === 0) {
+    pushWorkflowExpectationError(
+      errors,
+      index,
+      path,
+      "is required and must be a non-empty string",
+      { value: source[field] }
+    );
+    return false;
+  }
+
+  return true;
+}
+
+function validateExpectationEnum(errors, index, source, path, allowedValues, { required = false, field = path } = {}) {
+  if (!validateExpectationString(errors, index, source, path, { required, field })) {
+    return;
+  }
+
+  if (!allowedValues.has(source[field])) {
+    pushWorkflowExpectationError(
+      errors,
+      index,
+      path,
+      `must be one of ${formatAllowed(allowedValues)}`,
+      { value: source[field] }
+    );
+  }
+}
+
+function validateExpectationStringArray(errors, index, source, path, allowedValues = null) {
+  const value = source[path];
+  if (!Array.isArray(value)) {
+    pushWorkflowExpectationError(
+      errors,
+      index,
+      path,
+      "must be an array of non-empty strings",
+      { value }
+    );
+    return [];
+  }
+
+  const validValues = [];
+  for (const [itemIndex, item] of value.entries()) {
+    const itemPath = `${path}[${itemIndex}]`;
+    if (typeof item !== "string" || item.trim().length === 0) {
+      pushWorkflowExpectationError(
+        errors,
+        index,
+        itemPath,
+        "must be a non-empty string",
+        { value: item }
+      );
+      continue;
+    }
+
+    if (allowedValues && !allowedValues.has(item)) {
+      pushWorkflowExpectationError(
+        errors,
+        index,
+        itemPath,
+        `must be one of ${formatAllowed(allowedValues)}`,
+        { value: item }
+      );
+      continue;
+    }
+
+    validValues.push(item);
+  }
+
+  if (validValues.length === 0) {
+    pushWorkflowExpectationError(
+      errors,
+      index,
+      path,
+      "must contain at least one non-empty string"
+    );
+  }
+
+  return validValues;
+}
+
+function validateWorkflowExpectations(errors, index, entry) {
+  if (!Object.hasOwn(entry, "expect")) return;
+
+  const expect = entry.expect;
+  if (!isPlainObject(expect)) {
+    errors.push(compileIntegrationError(
+      "workflows",
+      index,
+      "expect",
+      `integration.workflows[${index}].expect must be an object`,
+      { value: expect }
+    ));
+    return;
+  }
+
+  for (const field of Object.keys(expect)) {
+    if (!workflowExpectationRules.allowedFields.has(field)) {
+      pushWorkflowExpectationError(errors, index, field, "is not supported");
+    }
+  }
+
+  for (const field of ["events", "event_types", "token_env", "required_env"]) {
+    if (Object.hasOwn(expect, field)) {
+      validateExpectationStringArray(errors, index, expect, field);
+    }
+  }
+
+  if (Object.hasOwn(expect, "mode")) {
+    validateExpectationEnum(errors, index, expect, "mode", workflowExpectationRules.modes);
+  }
+
+  if (Object.hasOwn(expect, "enforcement")) {
+    validateExpectationEnum(errors, index, expect, "enforcement", workflowExpectationRules.enforcementModes);
+  }
+
+  if (Object.hasOwn(expect, "summary") && typeof expect.summary !== "boolean") {
+    pushWorkflowExpectationError(
+      errors,
+      index,
+      "summary",
+      "must be a boolean",
+      { value: expect.summary }
+    );
+  }
+
+  if (Object.hasOwn(expect, "disallow")) {
+    validateExpectationStringArray(errors, index, expect, "disallow", workflowExpectationRules.disallowedPatterns);
+  }
+
+  if (Object.hasOwn(expect, "permissions")) {
+    if (!isPlainObject(expect.permissions)) {
+      pushWorkflowExpectationError(
+        errors,
+        index,
+        "permissions",
+        "must be an object",
+        { value: expect.permissions }
+      );
+    } else {
+      const entries = Object.entries(expect.permissions);
+      if (entries.length === 0) {
+        pushWorkflowExpectationError(errors, index, "permissions", "must declare at least one permission");
+      }
+      for (const [permission, value] of entries) {
+        if (!workflowExpectationRules.permissionValues.has(value)) {
+          pushWorkflowExpectationError(
+            errors,
+            index,
+            `permissions.${permission}`,
+            `must be one of ${formatAllowed(workflowExpectationRules.permissionValues)}`,
+            { value }
+          );
+        }
+      }
+    }
+  }
+
+  if (Object.hasOwn(expect, "action")) {
+    if (!isPlainObject(expect.action)) {
+      pushWorkflowExpectationError(
+        errors,
+        index,
+        "action",
+        "must be an object",
+        { value: expect.action }
+      );
+    } else {
+      for (const field of Object.keys(expect.action)) {
+        if (!workflowExpectationRules.actionFields.has(field)) {
+          pushWorkflowExpectationError(errors, index, `action.${field}`, "is not supported");
+        }
+      }
+      for (const field of ["uses", "ref"]) {
+        if (Object.hasOwn(expect.action, field)) {
+          validateExpectationString(errors, index, expect.action, `action.${field}`, { field });
+        }
+      }
+      if (Object.hasOwn(expect.action, "ref_pinning")) {
+        validateExpectationEnum(
+          errors,
+          index,
+          expect.action,
+          "action.ref_pinning",
+          workflowExpectationRules.refPinning,
+          { field: "ref_pinning" }
+        );
+      }
+    }
+  }
+}
+
 export function compileIntegrationPolicy(policy) {
   const errors = [];
   const integration = policy.integration;
@@ -526,6 +763,10 @@ export function compileIntegrationPolicy(policy) {
           `integration.${section}[${index}].role must be one of ${formatAllowed(rules.roles)}`,
           { value: entry.role }
         ));
+      }
+
+      if (section === "workflows") {
+        validateWorkflowExpectations(errors, index, entry);
       }
 
       if (!hasNonEmptyString(entry, "id")) continue;

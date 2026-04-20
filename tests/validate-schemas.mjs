@@ -97,6 +97,23 @@ const policyWithIntegration = {
         path: ".github/workflows/repo-guard.yml",
         role: "repo_guard_pr_gate",
         profiles: ["requirements-strict"],
+        expect: {
+          events: ["pull_request"],
+          event_types: ["opened", "synchronize", "reopened", "ready_for_review"],
+          action: {
+            uses: "netkeep80/repo-guard",
+            ref_pinning: "semver",
+          },
+          mode: "check-pr",
+          enforcement: "blocking",
+          permissions: {
+            contents: "read",
+            "pull-requests": "read",
+          },
+          token_env: ["GH_TOKEN"],
+          summary: true,
+          disallow: ["continue_on_error", "manual_clone", "direct_temp_cli_execution"],
+        },
       },
     ],
     templates: [
@@ -126,6 +143,30 @@ const policyWithIntegration = {
   },
 };
 expect("policy with integration section passes schema", validatePolicy(policyWithIntegration), true);
+
+const invalidIntegrationExpectationPolicy = {
+  ...validPolicy,
+  integration: {
+    workflows: [
+      {
+        id: "pr-gate",
+        kind: "github_actions",
+        path: ".github/workflows/repo-guard.yml",
+        role: "repo_guard_pr_gate",
+        expect: {
+          action: {
+            uses: "",
+            ref_pinning: "floating",
+          },
+          mode: "deploy",
+          token_env: [],
+          disallow: ["shell_script"],
+        },
+      },
+    ],
+  },
+};
+expect("policy with malformed integration workflow expectations fails schema", validatePolicy(invalidIntegrationExpectationPolicy), false);
 
 const invalidIntegrationPolicy = {
   ...validPolicy,

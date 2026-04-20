@@ -63,6 +63,23 @@ function extractTriggerEvents(onValue) {
   return [];
 }
 
+function extractTriggerEventTypes(onValue) {
+  if (!isPlainObject(onValue)) return [];
+
+  const result = [];
+  for (const [event, config] of Object.entries(onValue)) {
+    if (!isPlainObject(config) || !Object.hasOwn(config, "types")) continue;
+    const rawTypes = Array.isArray(config.types) ? config.types : [config.types];
+    const types = rawTypes
+      .filter((item) => item !== null && item !== undefined)
+      .map((item) => normalizeValue(item));
+    if (types.length > 0) {
+      result.push({ event, types });
+    }
+  }
+  return result;
+}
+
 function collectEnvVars(envValue, scope, extra = {}) {
   const env = normalizeMap(envValue);
   if (!env) return [];
@@ -87,6 +104,7 @@ function collectWorkflowFacts(entry, content) {
   const ifConditions = [];
   const runCommands = [];
   const summaryPublishing = [];
+  const continueOnError = [];
   const jobPermissions = [];
 
   for (const [jobId, job] of Object.entries(jobs)) {
@@ -106,6 +124,14 @@ function collectWorkflowFacts(entry, content) {
         scope: "job",
         jobId,
         condition: normalizeValue(job.if),
+      });
+    }
+
+    if (job["continue-on-error"] !== undefined) {
+      continueOnError.push({
+        scope: "job",
+        jobId,
+        value: normalizeValue(job["continue-on-error"]),
       });
     }
 
@@ -146,6 +172,13 @@ function collectWorkflowFacts(entry, content) {
         });
       }
 
+      if (step["continue-on-error"] !== undefined) {
+        continueOnError.push({
+          ...stepBase,
+          value: normalizeValue(step["continue-on-error"]),
+        });
+      }
+
       if (step.run !== undefined) {
         runCommands.push({
           ...stepBase,
@@ -171,7 +204,9 @@ function collectWorkflowFacts(entry, content) {
     kind: entry.kind,
     path: entry.path,
     role: entry.role,
+    expect: entry.expect || null,
     triggerEvents: extractTriggerEvents(data.on),
+    triggerEventTypes: extractTriggerEventTypes(data.on),
     permissions: {
       workflow: workflowPermission,
       jobs: jobPermissions,
@@ -182,6 +217,7 @@ function collectWorkflowFacts(entry, content) {
     ifConditions,
     runCommands,
     summaryPublishing,
+    continueOnError,
   };
 }
 

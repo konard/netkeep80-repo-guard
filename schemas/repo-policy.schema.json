@@ -394,7 +394,58 @@
           "enum": ["repo_guard_advisory", "repo_guard_policy_validation", "repo_guard_pr_gate"],
           "description": "Supported repo-guard role for this workflow."
         },
+        "expect": { "$ref": "#/definitions/integration_workflow_expectation" },
         "profiles": { "$ref": "#/definitions/non_empty_string_array" }
+      }
+    },
+    "integration_workflow_expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional workflow expectations checked by validate-integration for repo-guard workflow roles.",
+      "properties": {
+        "events": { "$ref": "#/definitions/non_empty_string_array" },
+        "event_types": { "$ref": "#/definitions/non_empty_string_array" },
+        "action": { "$ref": "#/definitions/integration_workflow_action_expectation" },
+        "mode": {
+          "type": "string",
+          "enum": ["check-pr", "check-diff"]
+        },
+        "enforcement": {
+          "type": "string",
+          "enum": ["advisory", "blocking"]
+        },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["none", "read", "write"]
+          },
+          "minProperties": 1
+        },
+        "token_env": { "$ref": "#/definitions/non_empty_string_array" },
+        "required_env": { "$ref": "#/definitions/non_empty_string_array" },
+        "summary": { "type": "boolean" },
+        "disallow": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["continue_on_error", "manual_clone", "direct_temp_cli_execution"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "integration_workflow_action_expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uses": { "$ref": "#/definitions/non_empty_string" },
+        "ref": { "$ref": "#/definitions/non_empty_string" },
+        "ref_pinning": {
+          "type": "string",
+          "enum": ["any", "local", "ref", "tag", "semver", "sha"]
+        }
       }
     },
     "integration_template": {

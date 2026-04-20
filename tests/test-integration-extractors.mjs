@@ -117,6 +117,7 @@ const files = {
     "          fetch-depth: 0",
     "      - name: Run repo-guard",
     "        if: always()",
+    "        continue-on-error: true",
     "        env:",
     "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
     "        run: |",
@@ -178,6 +179,12 @@ console.log("\n--- integration extractor builds normalized workflow, template, d
 
   const workflow = extraction.workflows[0];
   expect("workflow trigger events are normalized", workflow.triggerEvents, ["pull_request", "push"]);
+  expect("workflow trigger event types are normalized", workflow.triggerEventTypes, [
+    {
+      event: "pull_request",
+      types: ["opened", "synchronize"],
+    },
+  ]);
   expect("workflow permissions are normalized", workflow.permissions.workflow, { contents: "read" });
   expect("job permissions are normalized", workflow.permissions.jobs, [
     { jobId: "validate", permissions: { "pull-requests": "write" } },
@@ -201,6 +208,14 @@ console.log("\n--- integration extractor builds normalized workflow, template, d
       stepIndex: 2,
       stepName: "Run repo-guard",
       mode: "append",
+    },
+  ]);
+  expect("continue-on-error behavior is detected", workflow.continueOnError, [
+    {
+      jobId: "validate",
+      stepIndex: 2,
+      stepName: "Run repo-guard",
+      value: "true",
     },
   ]);
 

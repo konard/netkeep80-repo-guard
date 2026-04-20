@@ -15,6 +15,11 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
 jobs:
   policy-check:
     runs-on: ubuntu-latest
@@ -32,3 +37,7 @@ jobs:
         env:
           # Required for fetching linked issue contracts
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish repo-guard summary
+        if: always()
+        run: echo "### repo-guard" >> "$GITHUB_STEP_SUMMARY"

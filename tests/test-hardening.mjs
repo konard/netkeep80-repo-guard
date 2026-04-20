@@ -348,6 +348,23 @@ describe("integration policy compilation", () => {
             path: ".github/workflows/repo-guard.yml",
             role: "repo_guard_pr_gate",
             profiles: ["requirements-strict"],
+            expect: {
+              events: ["pull_request"],
+              event_types: ["opened", "synchronize", "reopened", "ready_for_review"],
+              action: {
+                uses: "netkeep80/repo-guard",
+                ref_pinning: "semver",
+              },
+              mode: "check-pr",
+              enforcement: "blocking",
+              permissions: {
+                contents: "read",
+                "pull-requests": "read",
+              },
+              token_env: ["GH_TOKEN"],
+              summary: true,
+              disallow: ["continue_on_error", "manual_clone", "direct_temp_cli_execution"],
+            },
           },
         ],
         templates: [
@@ -500,6 +517,46 @@ describe("integration policy compilation", () => {
     assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].role must be one of")));
     assert.ok(errors.some((e) => e.message.includes("integration.templates[0].kind must be one of")));
     assert.ok(errors.some((e) => e.message.includes("integration.docs[0].kind must be one of")));
+  });
+
+  it("rejects malformed workflow PR-gate expectations during compilation", () => {
+    const errors = compileIntegrationPolicy({
+      integration: {
+        workflows: [
+          {
+            id: "pr-gate",
+            kind: "github_actions",
+            path: ".github/workflows/repo-guard.yml",
+            role: "repo_guard_pr_gate",
+            expect: {
+              events: "pull_request",
+              action: {
+                uses: "",
+                ref_pinning: "floating",
+              },
+              mode: "deploy",
+              enforcement: "warn",
+              permissions: {
+                contents: "admin",
+              },
+              token_env: [],
+              summary: "yes",
+              disallow: ["manual_clone", "unknown_pattern"],
+            },
+          },
+        ],
+      },
+    });
+
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.events must be an array")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.action.uses is required")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.action.ref_pinning must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.mode must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.enforcement must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.permissions.contents must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.token_env must contain at least one")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.summary must be a boolean")));
+    assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.disallow[1] must be one of")));
   });
 
   it("rejects profile references that do not resolve to integration.profiles ids", () => {

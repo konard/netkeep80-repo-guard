@@ -54,6 +54,31 @@ function writeJson(path, value) {
   writeFileSync(path, JSON.stringify(value, null, 2));
 }
 
+function prGateExpect(overrides = {}) {
+  return {
+    events: ["pull_request"],
+    event_types: ["opened", "synchronize", "reopened", "ready_for_review"],
+    action: {
+      uses: "netkeep80/repo-guard",
+      ref_pinning: "semver",
+      ...overrides.action,
+    },
+    mode: "check-pr",
+    enforcement: "blocking",
+    permissions: {
+      contents: "read",
+      "pull-requests": "read",
+      ...overrides.permissions,
+    },
+    token_env: ["GH_TOKEN"],
+    summary: true,
+    disallow: ["continue_on_error", "manual_clone", "direct_temp_cli_execution"],
+    ...Object.fromEntries(Object.entries(overrides).filter(([key]) =>
+      key !== "action" && key !== "permissions"
+    )),
+  };
+}
+
 function basePolicy(overrides = {}) {
   return {
     policy_format_version: "0.3.0",
@@ -67,6 +92,7 @@ function basePolicy(overrides = {}) {
           path: ".github/workflows/repo-guard.yml",
           role: "repo_guard_pr_gate",
           profiles: ["self-hosting"],
+          expect: prGateExpect(),
         },
       ],
       templates: [
@@ -125,7 +151,11 @@ function makeRepo() {
     "name: repo guard",
     "on:",
     "  pull_request:",
+    "    types: [opened, synchronize, reopened, ready_for_review]",
     "  push:",
+    "permissions:",
+    "  contents: read",
+    "  pull-requests: read",
     "jobs:",
     "  validate:",
     "    runs-on: ubuntu-latest",
@@ -134,9 +164,15 @@ function makeRepo() {
     "        with:",
     "          fetch-depth: 0",
     "      - name: Run repo-guard",
+    "        uses: netkeep80/repo-guard@v1.2.3",
+    "        with:",
+    "          mode: check-pr",
+    "          enforcement: blocking",
     "        env:",
     "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
-    "        run: npx repo-guard check-pr --format summary",
+    "      - name: Publish repo-guard summary",
+    "        if: always()",
+    "        run: echo \"### repo-guard\" >> \"$GITHUB_STEP_SUMMARY\"",
     "",
   ].join("\n"));
   writeFileSync(join(dir, ".github", "PULL_REQUEST_TEMPLATE.md"), [
@@ -177,13 +213,20 @@ function makeBrokenRepo() {
   writeFileSync(join(dir, ".github", "workflows", "repo-guard.yml"), [
     "name: repo guard",
     "on:",
-    "  push:",
+    "  pull_request:",
+    "    types: [opened]",
+    "permissions:",
+    "  contents: write",
     "jobs:",
     "  validate:",
     "    runs-on: ubuntu-latest",
     "    steps:",
     "      - uses: actions/checkout@v4",
-    "      - run: echo no policy gate here",
+    "      - name: Drifted repo-guard",
+    "        continue-on-error: true",
+    "        run: |",
+    "          git clone https://github.com/netkeep80/repo-guard \"$RUNNER_TEMP/repo-guard\"",
+    "          node \"$RUNNER_TEMP/repo-guard/src/repo-guard.mjs\" check-diff",
     "",
   ].join("\n"));
   writeFileSync(join(dir, ".github", "PULL_REQUEST_TEMPLATE.md"), "## Missing contract\n");
@@ -216,7 +259,15 @@ console.log("\n--- validate-integration --format json emits normalized integrati
   expect("result passed", parsed?.result, "passed");
   expect("repository root is included", parsed?.repositoryRoot, dir);
   expect("workflow facts are emitted", parsed?.integration?.workflows?.[0]?.triggerEvents, ["pull_request", "push"]);
-  expect("run commands are normalized facts", parsed?.integration?.workflows?.[0]?.runCommands?.[0]?.run, "npx repo-guard check-pr --format summary");
+  expect("workflow event types are emitted", parsed?.integration?.workflows?.[0]?.triggerEventTypes, [
+    {
+      event: "pull_request",
+      types: ["opened", "synchronize", "reopened", "ready_for_review"],
+    },
+  ]);
+  expect("action inputs are normalized facts",
+    parsed?.integration?.workflows?.[0]?.stepInputs?.find((fact) => fact.uses === "netkeep80/repo-guard@v1.2.3")?.inputs,
+    { enforcement: "blocking", mode: "check-pr" });
   expect("template diagnostics pass", parsed?.ruleResults?.some((rule) => rule.rule === "integration-templates" && rule.ok), true);
   expect("stats include declared templates", parsed?.diagnostics?.declared?.templates, 2);
 
@@ -253,7 +304,12 @@ console.log("\n--- validate-integration --format summary reports CI-readable dia
   expect("broken integration blocks in blocking mode", result.code, 1);
   expectIncludes("summary heading", result.output, "## repo-guard integration summary");
   expectIncludes("summary result", result.output, "- Result: failed");
-  expectIncludes("workflow diagnostic appears", result.output, "repo_guard_pr_gate workflow must run on pull_request");
+  expectIncludes("workflow diagnostic appears", result.output, "missing required pull_request type synchronize");
+  expectIncludes("step diagnostic includes workflow context", result.output, ".github/workflows/repo-guard.yml: job validate step 2 \"Drifted repo-guard\"");
+  expectIncludes("continue-on-error diagnostic appears", result.output, "must not set continue-on-error");
+  expectIncludes("manual clone diagnostic appears", result.output, "must not clone repo-guard manually");
+  expectIncludes("direct temp CLI diagnostic appears", result.output, "must not run repo-guard directly from a temporary clone");
+  expectIncludes("summary diagnostic appears", result.output, "must publish to GITHUB_STEP_SUMMARY");
   expectIncludes("template diagnostic appears", result.output, "requires a repo-guard contract block");
   expectIncludes("doc diagnostic appears", result.output, "missing required mention");
 
