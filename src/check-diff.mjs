@@ -6,15 +6,14 @@ import { renderAnalysisReport } from "./reporting/renderers.mjs";
 import { loadJSON, loadPolicyRuntime, validationCheck } from "./runtime/validation.mjs";
 import { runPolicyPipeline } from "./runtime/pipeline.mjs";
 
-const CHECK_DIFF_USAGE = "Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]";
+const CHECK_DIFF_USAGE = "Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]";
 const FORMATS = new Set(["text", "json", "summary"]);
-const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract", "--format", "--change-class"]);
+const KNOWN_DIFF_OPTS = new Set(["--base", "--head", "--contract", "--format"]);
 
 function parseCheckDiffArgs(roots, args) {
   let base = null;
   let head = null;
   let contractPath = null;
-  let cliChangeClass = null;
   let format = "text";
 
   for (let i = 0; i < args.length; i++) {
@@ -24,16 +23,6 @@ function parseCheckDiffArgs(roots, args) {
       contractPath = resolve(roots.repoRoot, args[++i]);
     } else if (args[i] === "--format" && args[i + 1]) {
       format = args[++i];
-    } else if (args[i] === "--change-class") {
-      const next = args[i + 1];
-      if (!next || next.startsWith("-")) {
-        return {
-          ok: false,
-          message: "Error: --change-class requires a name argument",
-        };
-      }
-      cliChangeClass = next;
-      i++;
     } else if (args[i].startsWith("-") && !KNOWN_DIFF_OPTS.has(args[i])) {
       return {
         ok: false,
@@ -49,7 +38,7 @@ function parseCheckDiffArgs(roots, args) {
     };
   }
 
-  return { ok: true, base, head, contractPath, cliChangeClass, format };
+  return { ok: true, base, head, contractPath, format };
 }
 
 export function runCheckDiff(roots, args) {
@@ -109,7 +98,6 @@ export function runCheckDiff(roots, args) {
     console.error(`Error: ${e.message}`);
     process.exit(1);
   }
-  const declaredChangeClass = parsed.cliChangeClass || contract?.change_class || null;
 
   const report = runPolicyPipeline({
     mode: "check-diff",
@@ -119,7 +107,6 @@ export function runCheckDiff(roots, args) {
     contractSource: parsed.contractPath ? "cli file" : "none",
     enforcement,
     diffText,
-    declaredChangeClass,
     initialChecks,
   }, { quiet });
 

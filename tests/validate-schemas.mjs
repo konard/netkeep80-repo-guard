@@ -194,7 +194,6 @@ const policyWithSizeRules = {
       level: "advisory",
       ignore: ["src/generated/**"],
       applies_to_change_types: ["feature", "refactor"],
-      applies_to_change_classes: ["kernel-hardening"],
     },
   ],
 };
@@ -335,19 +334,40 @@ const invalidAnchorPolicy = {
 expect("invalid json_field anchor source fails schema", validatePolicy(invalidAnchorPolicy), false);
 
 const missingAllowClassesPolicy = {
-  change_classes: ["kernel-hardening"],
-  new_file_classes: {
-    test: ["tests/**"],
-  },
-  new_file_rules: {
-    "kernel-hardening": {
-      max_per_class: {
-        test: 1,
+  ...validPolicy,
+  change_profiles: {
+    feature: {
+      allow_surfaces: ["kernel"],
+      new_files: {
+        max_per_class: {
+          test: 1,
+        },
       },
     },
   },
 };
-expect("new_file_rules without allow_classes fails schema", validatePolicy(missingAllowClassesPolicy), false);
+expect("change_profiles.new_files without allow_classes fails schema", validatePolicy(missingAllowClassesPolicy), false);
+
+const removedPolicyFields = [
+  "change_classes",
+  "surface_matrix",
+  "new_file_rules",
+  "change_type_rules",
+  "allow_unclassified_files",
+];
+for (const removed of removedPolicyFields) {
+  const policyWithRemovedField = {
+    ...validPolicy,
+    [removed]: removed === "allow_unclassified_files" ? true : {},
+  };
+  expect(`removed policy field "${removed}" is rejected by schema`, validatePolicy(policyWithRemovedField), false);
+}
+
+const contractWithRemovedField = {
+  ...loadJSON(resolve(root, "tests/fixtures/valid-contract.json")),
+  change_class: "kernel-hardening",
+};
+expect("removed contract field \"change_class\" is rejected by schema", validateContract(contractWithRemovedField), false);
 
 // Contract tests
 const validContract = loadJSON(resolve(root, "tests/fixtures/valid-contract.json"));

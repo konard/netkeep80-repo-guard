@@ -21,47 +21,43 @@
     "docs": ["docs/**", "README.md"],
     "generated": ["single_include/**"]
   },
-  "change_classes": ["kernel-hardening", "docs-cleanup", "generated-refresh"],
-  "allow_unclassified_files": false,
-  "surface_matrix": {
-    "kernel-hardening": {
-      "allow": ["kernel", "tests"],
-      "forbid": ["generated"]
-    },
-    "docs-cleanup": {
-      "allow": ["docs"],
-      "forbid": ["kernel", "tests", "generated"]
-    },
-    "generated-refresh": {
-      "allow": ["generated"],
-      "forbid": ["kernel", "docs", "tests"]
-    }
-  },
   "new_file_classes": {
     "test": ["tests/**"],
     "canonical_doc": ["README.md", "docs/**"],
     "generated": ["single_include/**"],
     "changelog_fragment": ["changelog.d/*.md"]
   },
-  "new_file_rules": {
-    "kernel-hardening": {
-      "allow_classes": ["test", "changelog_fragment"],
-      "max_per_class": {
-        "test": 2,
-        "changelog_fragment": 1
+  "change_profiles": {
+    "feature": {
+      "allow_surfaces": ["kernel", "tests"],
+      "forbid_surfaces": ["generated"],
+      "new_files": {
+        "allow_classes": ["test", "changelog_fragment"],
+        "max_per_class": {
+          "test": 2,
+          "changelog_fragment": 1
+        }
       }
     },
-    "docs-cleanup": {
-      "allow_classes": ["canonical_doc"],
-      "max_per_class": {
-        "canonical_doc": 1
+    "docs": {
+      "allow_surfaces": ["docs"],
+      "forbid_surfaces": ["kernel", "tests", "generated"],
+      "new_files": {
+        "allow_classes": ["canonical_doc"],
+        "max_per_class": {
+          "canonical_doc": 1
+        }
       }
     },
-    "generated-refresh": {
-      "allow_classes": ["generated", "changelog_fragment"],
-      "max_per_class": {
-        "generated": 10,
-        "changelog_fragment": 1
+    "refactor": {
+      "allow_surfaces": ["generated"],
+      "forbid_surfaces": ["kernel", "docs", "tests"],
+      "new_files": {
+        "allow_classes": ["generated", "changelog_fragment"],
+        "max_per_class": {
+          "generated": 10,
+          "changelog_fragment": 1
+        }
       }
     }
   },

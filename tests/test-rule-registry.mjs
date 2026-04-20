@@ -104,23 +104,16 @@ const facts = {
       tests: ["tests/**"],
       docs: ["docs/**"],
     },
-    change_type_rules: {
-      implementation: {
-        require_surfaces: ["tests"],
-        allow_surfaces: ["app", "tests", "docs"],
-      },
-    },
     new_file_classes: {
       tests: ["tests/**"],
     },
-    new_file_rules: {
+    change_profiles: {
       implementation: {
-        allow_classes: ["tests"],
-      },
-    },
-    surface_matrix: {
-      implementation: {
-        allow: ["app", "tests", "docs"],
+        require_surfaces: ["tests"],
+        allow_surfaces: ["app", "tests", "docs"],
+        new_files: {
+          allow_classes: ["tests"],
+        },
       },
     },
     cochange_rules: [
@@ -154,7 +147,6 @@ const facts = {
   anchors: {
     errors: [],
   },
-  declaredChangeClass: "implementation",
 };
 
 const anchorDiagnostics = {
@@ -204,9 +196,7 @@ for (const name of [
   "advisory-text-rules",
   "anchor-extraction",
   "trace-rule: evidence-ok",
-  "change-type-rules",
-  "new-file-rules",
-  "surface-matrix",
+  "change-profiles",
   "cochange-rules",
   "content-rules",
   "must-touch",

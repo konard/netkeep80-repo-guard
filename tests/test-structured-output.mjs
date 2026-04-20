@@ -167,19 +167,18 @@ function makeSurfaceRepo() {
       generated: ["single_include/**"],
       release: ["CHANGELOG.md", "package.json"],
     },
-    change_classes: ["docs-cleanup", "kernel-hardening", "generated-refresh"],
-    surface_matrix: {
-      "docs-cleanup": {
-        allow: ["docs", "governance"],
-        forbid: ["kernel", "tests", "generated", "release"],
+    change_profiles: {
+      docs: {
+        allow_surfaces: ["docs", "governance"],
+        forbid_surfaces: ["kernel", "tests", "generated", "release"],
       },
-      "kernel-hardening": {
-        allow: ["kernel", "tests"],
-        forbid: ["generated", "release"],
+      feature: {
+        allow_surfaces: ["kernel", "tests"],
+        forbid_surfaces: ["generated", "release"],
       },
-      "generated-refresh": {
-        allow: ["generated", "release"],
-        forbid: ["kernel", "docs", "governance"],
+      refactor: {
+        allow_surfaces: ["generated", "release"],
+        forbid_surfaces: ["kernel", "docs", "governance"],
       },
     },
     content_rules: [],
@@ -325,12 +324,11 @@ function makeUnclassifiedOnlySurfaceRepo() {
     surfaces: {
       docs: ["docs/**", "README.md"],
     },
-    change_classes: ["docs-cleanup"],
-    allow_unclassified_files: true,
-    surface_matrix: {
-      "docs-cleanup": {
-        allow: ["docs"],
-        forbid: [],
+    change_profiles: {
+      docs: {
+        allow_surfaces: ["docs"],
+        forbid_surfaces: [],
+        allow_unclassified_surfaces: true,
       },
     },
     content_rules: [],
@@ -655,30 +653,39 @@ console.log("\n--- check-diff reports anchor diagnostics in JSON and summary out
   rmSync(repo.dir, { recursive: true });
 }
 
-console.log("\n--- check-diff --change-class enforces surface_matrix ---");
+console.log("\n--- check-diff with docs change_profile flags forbidden surfaces ---");
 {
   const repo = makeSurfaceRepo();
+  writeFileSync(join(repo.dir, "contract.json"), JSON.stringify({
+    change_type: "docs",
+    scope: ["docs/**"],
+    budgets: {},
+    must_touch: [],
+    must_not_touch: [],
+    expected_effects: ["Documentation change"],
+  }, null, 2));
+
   const result = runGuard([
     "--repo-root", repo.dir,
     "check-diff",
     "--format", "json",
     "--base", repo.base,
     "--head", repo.head,
-    "--change-class", "docs-cleanup",
+    "--contract", "contract.json",
   ]);
 
-  expect("surface matrix exit code follows blocking failure", result.code, 1);
+  expect("change_profiles exit code follows blocking failure", result.code, 1);
   let parsed = null;
   try {
     parsed = JSON.parse(result.stdout);
-    expect("surface matrix stdout is valid json", true, true);
+    expect("change_profiles stdout is valid json", true, true);
   } catch (e) {
-    expect("surface matrix stdout is valid json", e.message, "valid json");
+    expect("change_profiles stdout is valid json", e.message, "valid json");
   }
-  expect("surface matrix violation is detailed",
+  expect("change_profiles violation is detailed",
     parsed?.violations.some((v) =>
-      v.rule === "surface-matrix" &&
-      v.data?.change_class === "docs-cleanup" &&
+      v.rule === "change-profiles" &&
+      v.data?.change_type === "docs" &&
       v.data?.touched_surfaces?.includes("docs") &&
       v.data?.touched_surfaces?.includes("kernel") &&
       v.data?.violating_surfaces?.includes("kernel") &&
@@ -689,28 +696,37 @@ console.log("\n--- check-diff --change-class enforces surface_matrix ---");
   rmSync(repo.dir, { recursive: true });
 }
 
-console.log("\n--- check-diff honors allow_unclassified_files policy switch ---");
+console.log("\n--- check-diff honors allow_unclassified_surfaces profile switch ---");
 {
   const repo = makeUnclassifiedOnlySurfaceRepo();
+  writeFileSync(join(repo.dir, "contract.json"), JSON.stringify({
+    change_type: "docs",
+    scope: ["scripts/**"],
+    budgets: {},
+    must_touch: [],
+    must_not_touch: [],
+    expected_effects: ["Script tweak"],
+  }, null, 2));
+
   const result = runGuard([
     "--repo-root", repo.dir,
     "check-diff",
     "--format", "json",
     "--base", repo.base,
     "--head", repo.head,
-    "--change-class", "docs-cleanup",
+    "--contract", "contract.json",
   ]);
 
-  expect("allow_unclassified_files keeps unclassified-only diff passing", result.code, 0);
+  expect("allow_unclassified_surfaces keeps unclassified-only diff passing", result.code, 0);
   let parsed = null;
   try {
     parsed = JSON.parse(result.stdout);
-    expect("allow_unclassified_files stdout is valid json", true, true);
+    expect("allow_unclassified_surfaces stdout is valid json", true, true);
   } catch (e) {
-    expect("allow_unclassified_files stdout is valid json", e.message, "valid json");
+    expect("allow_unclassified_surfaces stdout is valid json", e.message, "valid json");
   }
-  expect("allow_unclassified_files result is ok", parsed?.ok, true);
-  expect("allow_unclassified_files has no violations", parsed?.violations.length, 0);
+  expect("allow_unclassified_surfaces result is ok", parsed?.ok, true);
+  expect("allow_unclassified_surfaces has no violations", parsed?.violations.length, 0);
 
   rmSync(repo.dir, { recursive: true });
 }

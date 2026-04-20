@@ -7,16 +7,14 @@ import {
   checkNewFilesBudget,
   checkSurfaceDebt,
 } from "../src/checks/rules/budgets.mjs";
-import { checkChangeTypeRules } from "../src/checks/rules/change-type-rules.mjs";
+import { checkChangeProfile } from "../src/checks/rules/change-profiles.mjs";
 import { checkCochangeRules } from "../src/checks/rules/cochange-rules.mjs";
 import { checkContentRules } from "../src/checks/rules/content-rules.mjs";
 import { checkMustNotTouch, checkMustTouch } from "../src/checks/rules/contract-rules.mjs";
 import { checkAdvisoryTextRules } from "../src/checks/rules/advisory-text-rules.mjs";
 import { checkForbiddenPaths } from "../src/checks/rules/paths.mjs";
-import { checkNewFileRules } from "../src/checks/rules/new-file-rules.mjs";
 import { checkRegistryRules } from "../src/checks/rules/registry-rules.mjs";
 import { checkSizeRules, countTextLines } from "../src/checks/rules/size-rules.mjs";
-import { checkSurfaceMatrix } from "../src/checks/rules/surface-matrix.mjs";
 
 let failures = 0;
 
@@ -354,62 +352,58 @@ expect("10. detects docs surface", touchedSurfaces.touched_surfaces.includes("do
 expect("10. maps files by surface", touchedSurfaces.files_by_surface.kernel[0], "src/core.mjs");
 expect("10. reports no unclassified files for fully classified diff", touchedSurfaces.unclassified_files.length, 0);
 
-const surfaceMatrix = {
-  "kernel-hardening": {
-    allow: ["kernel", "tests"],
-    forbid: ["generated", "release"],
-  },
-  "docs-cleanup": {
-    allow: ["docs", "governance"],
-    forbid: ["kernel", "tests", "generated", "release"],
-  },
+// --- 10-12. change_profiles (unified DSL) ---
+
+const newFileClasses = {
+  test: ["tests/**"],
+  changelog_fragment: ["changelog.d/*.md"],
+  generated: ["single_include/**"],
 };
 
-const kernelOnlyFiles = [
-  { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
-  { path: "tests/core.test.mjs", addedLines: ["test"], deletedLines: [], status: "modified" },
-];
-
-const kernelSurfaceResult = checkSurfaceMatrix(kernelOnlyFiles, surfaces, surfaceMatrix, "kernel-hardening");
-expect("10. allowed kernel/test surface combination passes", kernelSurfaceResult.ok, true);
-expect("10. allowed combination reports change_class", kernelSurfaceResult.change_class, "kernel-hardening");
-
-const unclassifiedOnlyFiles = [
-  { path: "scripts/tool.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
-];
-
-const unclassifiedSurfaces = detectTouchedSurfaces(unclassifiedOnlyFiles, surfaces);
-expect("10. detects unclassified changed file", unclassifiedSurfaces.unclassified_files[0], "scripts/tool.mjs");
-
-const unclassifiedResult = checkSurfaceMatrix(unclassifiedOnlyFiles, surfaces, surfaceMatrix, "docs-cleanup");
-expect("10. surface matrix rejects unclassified files by default", unclassifiedResult.ok, false);
-expect("10. reports unclassified files", unclassifiedResult.unclassified_files[0], "scripts/tool.mjs");
-expect("10. unclassified failure message names file", unclassifiedResult.message.includes("scripts/tool.mjs"), true);
-
-const allowedUnclassifiedResult = checkSurfaceMatrix(
-  unclassifiedOnlyFiles,
-  surfaces,
-  surfaceMatrix,
-  "docs-cleanup",
-  { allow_unclassified_files: true }
-);
-expect("10. policy can explicitly allow unclassified files", allowedUnclassifiedResult.ok, true);
-
-const docsSurfaceResult = checkSurfaceMatrix(surfaceFiles, surfaces, surfaceMatrix, "docs-cleanup");
-expect("10. docs class rejects kernel/test surfaces", docsSurfaceResult.ok, false);
-expect("10. reports declared change_class", docsSurfaceResult.change_class, "docs-cleanup");
-expect("10. reports touched surfaces", docsSurfaceResult.touched_surfaces.join(","), "docs,kernel,tests");
-expect("10. reports violating surfaces", docsSurfaceResult.violating_surfaces.join(","), "kernel,tests");
-
-const missingClassResult = checkSurfaceMatrix(surfaceFiles, surfaces, surfaceMatrix, null);
-expect("10. surface matrix requires change_class", missingClassResult.ok, false);
-expect("10. missing change_class message", missingClassResult.message, "surface_matrix requires a declared change_class");
-
-const unknownClassResult = checkSurfaceMatrix(surfaceFiles, surfaces, surfaceMatrix, "release");
-expect("10. undefined change_class fails", unknownClassResult.ok, false);
-expect("10. undefined change_class is reported", unknownClassResult.change_class, "release");
-
-// --- 11. new file classes ---
+const changeProfilePolicy = {
+  paths: {
+    canonical_docs: ["README.md"],
+  },
+  surfaces: {
+    ...surfaces,
+    docs: [...surfaces.docs, "changelog.d/*.md"],
+  },
+  new_file_classes: newFileClasses,
+  change_profiles: {
+    feature: {
+      allow_surfaces: ["kernel", "tests"],
+      forbid_surfaces: ["generated", "release"],
+      require_surfaces: ["tests"],
+      new_files: {
+        allow_classes: ["test", "changelog_fragment"],
+        max_per_class: {
+          test: 2,
+          changelog_fragment: 1,
+        },
+      },
+    },
+    docs: {
+      allow_surfaces: ["docs"],
+      forbid_surfaces: ["kernel", "tests", "generated", "release"],
+      new_files: {
+        allow_classes: ["changelog_fragment"],
+        max_per_class: {
+          changelog_fragment: 1,
+        },
+      },
+      budgets: {
+        max_new_docs: 0,
+        max_new_files: 1,
+      },
+    },
+    refactor: {
+      allow_surfaces: ["kernel", "tests"],
+      new_files: {
+        allow_classes: [],
+      },
+    },
+  },
+};
 
 const newFileClassFiles = [
   { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
@@ -419,189 +413,109 @@ const newFileClassFiles = [
   { path: "scratch.txt", addedLines: ["temp"], deletedLines: [], status: "added" },
 ];
 
-const newFileClasses = {
-  test: ["tests/**"],
-  changelog_fragment: ["changelog.d/*.md"],
-  generated: ["single_include/**"],
-};
-
 const classifiedNewFiles = classifyNewFiles(newFileClassFiles, newFileClasses);
-expect("11. classifies only added files", classifiedNewFiles.new_files.length, 4);
-expect("11. detects test class", classifiedNewFiles.files_by_class.test[0], "tests/core.test.mjs");
-expect("11. reports unclassified new file", classifiedNewFiles.unclassified_files[0], "scratch.txt");
-expect("11. ignores modified files for classification", classifiedNewFiles.new_files.includes("src/core.mjs"), false);
+expect("10. classifies only added files", classifiedNewFiles.new_files.length, 4);
+expect("10. detects test class", classifiedNewFiles.files_by_class.test[0], "tests/core.test.mjs");
+expect("10. reports unclassified new file", classifiedNewFiles.unclassified_files[0], "scratch.txt");
+expect("10. ignores modified files for classification", classifiedNewFiles.new_files.includes("src/core.mjs"), false);
 
-const newFileRules = {
-  "kernel-hardening": {
-    allow_classes: ["test", "changelog_fragment"],
-    max_per_class: {
-      test: 2,
-      changelog_fragment: 1,
-    },
-  },
-  "docs-cleanup": {
-    allow_classes: [],
-    max_new_files: 0,
-  },
-  "generated-refresh": {
-    allow_classes: ["generated"],
-    max_per_class: {
-      generated: 1,
-    },
-  },
-};
-
-const allowedTypedNewFiles = [
-  { path: "tests/core.test.mjs", addedLines: ["test"], deletedLines: [], status: "added" },
-  { path: "changelog.d/core.md", addedLines: ["note"], deletedLines: [], status: "added" },
+const featureAllowedFiles = [
+  { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
+  { path: "tests/core.test.mjs", addedLines: ["test"], deletedLines: [], status: "modified" },
 ];
 
-const allowedNewFileResult = checkNewFileRules(
-  allowedTypedNewFiles,
-  newFileClasses,
-  newFileRules,
-  "kernel-hardening"
-);
-expect("11. allowed new file classes pass", allowedNewFileResult.ok, true);
-expect("11. reports declared new-file change_class", allowedNewFileResult.change_class, "kernel-hardening");
+const featureResult = checkChangeProfile(featureAllowedFiles, changeProfilePolicy, "feature");
+expect("11. change_profiles allow declared surfaces", featureResult.ok, true);
+expect("11. change_profiles reports declared change_type", featureResult.change_type, "feature");
 
-const disallowedNewFileResult = checkNewFileRules(
-  newFileClassFiles,
-  newFileClasses,
-  newFileRules,
-  "kernel-hardening"
-);
-expect("11. rejects disallowed new file class", disallowedNewFileResult.ok, false);
-expect("11. reports generated class violation", disallowedNewFileResult.violating_classes[0], "generated");
-expect("11. failure names offending generated file", disallowedNewFileResult.details.some((d) => d.includes("single_include/core.h")), true);
-expect("11. failure names unclassified file", disallowedNewFileResult.details.some((d) => d.includes("scratch.txt")), true);
+const unclassifiedOnlyFiles = [
+  { path: "scripts/tool.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
+];
+const unclassifiedSurfaces = detectTouchedSurfaces(unclassifiedOnlyFiles, surfaces);
+expect("11. detects unclassified changed file", unclassifiedSurfaces.unclassified_files[0], "scripts/tool.mjs");
 
-const tooManyTestsResult = checkNewFileRules(
-  [
-    { path: "tests/a.test.mjs", addedLines: ["test"], deletedLines: [], status: "added" },
-    { path: "tests/b.test.mjs", addedLines: ["test"], deletedLines: [], status: "added" },
-  ],
-  newFileClasses,
-  {
-    "kernel-hardening": {
-      allow_classes: ["test"],
-      max_per_class: { test: 1 },
-    },
-  },
-  "kernel-hardening"
-);
-expect("11. enforces max_per_class", tooManyTestsResult.ok, false);
-expect("11. max_per_class reports class", tooManyTestsResult.class_budget_violations[0].class, "test");
+const unclassifiedResult = checkChangeProfile(unclassifiedOnlyFiles, changeProfilePolicy, "docs");
+expect("11. change_profiles rejects unclassified surfaces by default", unclassifiedResult.ok, false);
+expect("11. reports unclassified file", unclassifiedResult.unclassified_files[0], "scripts/tool.mjs");
 
-const docsCleanupResult = checkNewFileRules(
-  allowedTypedNewFiles,
-  newFileClasses,
-  newFileRules,
-  "docs-cleanup"
-);
-expect("11. per-change max_new_files can forbid all new files", docsCleanupResult.ok, false);
-expect("11. per-change max_new_files reports actual", docsCleanupResult.actual, 2);
-
-expect(
-  "11. new file rules require change_class when new files exist",
-  checkNewFileRules(allowedTypedNewFiles, newFileClasses, newFileRules, null).ok,
-  false
-);
-expect(
-  "11. new file rules pass when no new files exist without change_class",
-  checkNewFileRules([{ path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" }], newFileClasses, newFileRules, null).ok,
-  true
-);
-
-// --- 12. change type rules ---
-
-const changeTypePolicy = {
-  paths: {
-    canonical_docs: ["README.md"],
-  },
-  surfaces: {
-    ...surfaces,
-    docs: [...surfaces.docs, "changelog.d/*.md"],
-  },
-  new_file_classes: newFileClasses,
-  change_type_rules: {
-    governance: {
-      allow_surfaces: ["docs"],
-      forbid_surfaces: ["kernel", "generated"],
-      max_new_docs: 0,
-      max_new_files: 1,
-      new_file_rules: {
-        allow_classes: ["changelog_fragment"],
-        max_per_class: {
-          changelog_fragment: 1,
-        },
-      },
-    },
-    "kernel-hardening": {
-      require_surfaces: ["tests"],
+const allowUnclassifiedPolicy = {
+  ...changeProfilePolicy,
+  change_profiles: {
+    ...changeProfilePolicy.change_profiles,
+    docs: {
+      ...changeProfilePolicy.change_profiles.docs,
+      allow_unclassified_surfaces: true,
     },
   },
 };
+const allowedUnclassifiedResult = checkChangeProfile(unclassifiedOnlyFiles, allowUnclassifiedPolicy, "docs");
+expect("11. allow_unclassified_surfaces permits unclassified paths", allowedUnclassifiedResult.ok, true);
 
-const governanceViolation = checkChangeTypeRules(
+const forbiddenSurfacesResult = checkChangeProfile(
   [
     { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
     { path: "docs/new.md", addedLines: ["docs"], deletedLines: [], status: "added" },
     { path: "single_include/core.h", addedLines: ["generated"], deletedLines: [], status: "added" },
   ],
-  changeTypePolicy,
-  "governance"
+  changeProfilePolicy,
+  "docs"
 );
-expect("12. change type rules reject forbidden surfaces", governanceViolation.ok, false);
-expect("12. change type result names declared type", governanceViolation.change_type, "governance");
-expect("12. change type reports violating kernel surface", governanceViolation.violating_surfaces.includes("kernel"), true);
-expect("12. change type reports docs budget", governanceViolation.docs_budget.ok, false);
-expect("12. change type reports new-file class violations", governanceViolation.new_file_rules.ok, false);
+expect("12. change_profiles rejects forbidden surfaces", forbiddenSurfacesResult.ok, false);
+expect("12. change_profiles reports violating kernel surface", forbiddenSurfacesResult.violating_surfaces.includes("kernel"), true);
+expect("12. change_profiles reports docs budget", forbiddenSurfacesResult.docs_budget.ok, false);
+expect("12. change_profiles reports new-file class violations", forbiddenSurfacesResult.new_files.ok, false);
 
-const governanceUnclassifiedViolation = checkChangeTypeRules(
-  [
-    { path: "docs/policy.md", addedLines: ["docs"], deletedLines: [], status: "modified" },
-    { path: "scripts/tool.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
-  ],
-  changeTypePolicy,
-  "governance"
-);
-expect("12. change type surface constraints reject unclassified files", governanceUnclassifiedViolation.ok, false);
-expect("12. change type reports unclassified file", governanceUnclassifiedViolation.unclassified_files[0], "scripts/tool.mjs");
-expect(
-  "12. change type unclassified file appears in details",
-  governanceUnclassifiedViolation.details.some((detail) => detail.includes("scripts/tool.mjs")),
-  true
-);
-
-const kernelHardeningAllowed = checkChangeTypeRules(
-  [
-    { path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" },
-    { path: "tests/core.test.mjs", addedLines: ["test"], deletedLines: [], status: "modified" },
-  ],
-  changeTypePolicy,
-  "kernel-hardening"
-);
-expect("12. change type rules pass allowed constraints", kernelHardeningAllowed.ok, true);
-
-const missingRequiredSurface = checkChangeTypeRules(
+const missingRequiredSurface = checkChangeProfile(
   [{ path: "src/core.mjs", addedLines: ["code"], deletedLines: [], status: "modified" }],
-  changeTypePolicy,
-  "kernel-hardening"
+  changeProfilePolicy,
+  "feature"
 );
-expect("12. change type require_surfaces fails when missing", missingRequiredSurface.ok, false);
-expect("12. change type missing surface reported", missingRequiredSurface.missing_required_surfaces[0], "tests");
+expect("12. change_profiles require_surfaces fails when missing", missingRequiredSurface.ok, false);
+expect("12. missing required surface reported", missingRequiredSurface.missing_required_surfaces[0], "tests");
 
 expect(
-  "12. change type rules require declared change_type",
-  checkChangeTypeRules(surfaceFiles, changeTypePolicy, null).ok,
+  "12. change_profiles require declared change_type",
+  checkChangeProfile(surfaceFiles, changeProfilePolicy, null).ok,
   false
 );
 expect(
   "12. unknown change_type fails with known types",
-  checkChangeTypeRules(surfaceFiles, changeTypePolicy, "release").ok,
+  checkChangeProfile(surfaceFiles, changeProfilePolicy, "release").ok,
   false
 );
+
+const disallowedNewFileResult = checkChangeProfile(newFileClassFiles, changeProfilePolicy, "feature");
+expect("12. change_profiles rejects disallowed new file class", disallowedNewFileResult.ok, false);
+expect(
+  "12. disallowed new-file details name offending file",
+  disallowedNewFileResult.details.some((d) => d.includes("single_include/core.h")),
+  true
+);
+
+const tooManyTestsResult = checkChangeProfile(
+  [
+    { path: "tests/a.test.mjs", addedLines: ["test"], deletedLines: [], status: "added" },
+    { path: "tests/b.test.mjs", addedLines: ["test"], deletedLines: [], status: "added" },
+    { path: "tests/c.test.mjs", addedLines: ["test"], deletedLines: [], status: "added" },
+  ],
+  changeProfilePolicy,
+  "feature"
+);
+expect("12. change_profiles enforces max_per_class", tooManyTestsResult.ok, false);
+expect(
+  "12. change_profiles reports class budget violation",
+  tooManyTestsResult.new_files.class_budget_violations[0].class,
+  "test"
+);
+
+const denyAllResult = checkChangeProfile(
+  [
+    { path: "tests/new.test.mjs", addedLines: ["test"], deletedLines: [], status: "added" },
+  ],
+  changeProfilePolicy,
+  "refactor"
+);
+expect("12. empty allow_classes denies all new-file classes", denyAllResult.ok, false);
 
 // --- 13. registry rules ---
 

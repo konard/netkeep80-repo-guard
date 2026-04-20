@@ -111,7 +111,6 @@ function buildPRTemplate() {
 
 \`\`\`repo-guard-yaml
 change_type: feature
-change_class: kernel-hardening
 scope:
   - src/
 budgets: {}
@@ -154,7 +153,6 @@ body:
       value: |
         \`\`\`repo-guard-yaml
         change_type: feature
-        change_class: kernel-hardening
         scope:
           - src/
         budgets: {}

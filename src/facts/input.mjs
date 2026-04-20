@@ -20,7 +20,6 @@ export function buildPolicyFacts({
   enforcement,
   diffText,
   trackedFiles = null,
-  declaredChangeClass = null,
   diagnostics = {},
   readFile = null,
 }) {
@@ -72,7 +71,6 @@ export function buildPolicyFacts({
       touchedSurfaces,
       newFileClasses,
     },
-    declaredChangeClass,
     diagnostics: {
       ...diagnostics,
       skippedOperationalFiles: skippedOperationalFiles.length,

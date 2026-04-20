@@ -245,7 +245,6 @@ export function runCheckPR(roots, args = []) {
     contractSource,
     enforcement,
     diffText,
-    declaredChangeClass: contract?.change_class || null,
     initialChecks,
   });
   process.exit(summary.exitCode);

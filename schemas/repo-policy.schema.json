@@ -13,7 +13,7 @@
   ],
   "additionalProperties": false,
   "dependencies": {
-    "surface_matrix": ["surfaces", "change_classes"],
+    "change_profiles": ["surfaces"],
     "profile_overrides": ["profile"]
   },
   "properties": {
@@ -138,40 +138,6 @@
         "minItems": 1
       }
     },
-    "change_classes": {
-      "type": "array",
-      "description": "Named change classes that can be declared by a change contract or check-diff --change-class.",
-      "items": { "type": "string", "minLength": 1 },
-      "minItems": 1,
-      "uniqueItems": true
-    },
-    "allow_unclassified_files": {
-      "type": "boolean",
-      "description": "When surface_matrix is enabled, changed files that match no declared surface fail by default. Set this true only when partial surface coverage is intentional."
-    },
-    "surface_matrix": {
-      "type": "object",
-      "description": "Allowed repository surface combinations for each named change class.",
-      "minProperties": 1,
-      "additionalProperties": {
-        "type": "object",
-        "required": ["allow"],
-        "additionalProperties": false,
-        "properties": {
-          "allow": {
-            "type": "array",
-            "items": { "type": "string", "minLength": 1 },
-            "minItems": 1,
-            "uniqueItems": true
-          },
-          "forbid": {
-            "type": "array",
-            "items": { "type": "string", "minLength": 1 },
-            "uniqueItems": true
-          }
-        }
-      }
-    },
     "new_file_classes": {
       "type": "object",
       "description": "Named classes for newly added files mapped to one or more path globs. A new file can match multiple classes.",
@@ -182,37 +148,9 @@
         "minItems": 1
       }
     },
-    "new_file_rules": {
+    "change_profiles": {
       "type": "object",
-      "description": "Allowed new-file classes and per-class budgets for each named change class.",
-      "minProperties": 1,
-      "additionalProperties": {
-        "type": "object",
-        "required": ["allow_classes"],
-        "additionalProperties": false,
-        "properties": {
-          "allow_classes": {
-            "type": "array",
-            "items": { "type": "string", "minLength": 1 },
-            "uniqueItems": true
-          },
-          "max_per_class": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          "max_new_files": {
-            "type": "integer",
-            "minimum": 0
-          }
-        }
-      }
-    },
-    "change_type_rules": {
-      "type": "object",
-      "description": "Per-change-type policy constraints keyed by contract change_type.",
+      "description": "Per-change-type policy constraints keyed by contract change_type. Each profile fully describes the change intent: allowed/forbidden/required surfaces, new-file class rules, and per-type budgets. Replaces the deprecated change_classes, surface_matrix, new_file_rules, and change_type_rules fields.",
       "minProperties": 1,
       "additionalProperties": {
         "type": "object",
@@ -233,20 +171,13 @@
             "items": { "type": "string", "minLength": 1 },
             "uniqueItems": true
           },
-          "max_new_docs": {
-            "type": "integer",
-            "minimum": 0
+          "allow_unclassified_surfaces": {
+            "type": "boolean",
+            "description": "When false (default), a changed file that matches no declared surface fails this profile. Set true when partial surface coverage is intentional."
           },
-          "max_new_files": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "max_net_added_lines": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "new_file_rules": {
+          "new_files": {
             "type": "object",
+            "description": "Allowed new-file classes and per-class budgets for this change_type.",
             "required": ["allow_classes"],
             "additionalProperties": false,
             "properties": {
@@ -263,6 +194,25 @@
                 }
               },
               "max_new_files": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "budgets": {
+            "type": "object",
+            "description": "Per-change-type budget constraints overriding top-level diff_rules.",
+            "additionalProperties": false,
+            "properties": {
+              "max_new_docs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_new_files": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_net_added_lines": {
                 "type": "integer",
                 "minimum": 0
               }
@@ -465,8 +415,7 @@
           "default": "blocking"
         },
         "ignore": { "$ref": "#/definitions/non_empty_string_array" },
-        "applies_to_change_types": { "$ref": "#/definitions/non_empty_string_array" },
-        "applies_to_change_classes": { "$ref": "#/definitions/non_empty_string_array" }
+        "applies_to_change_types": { "$ref": "#/definitions/non_empty_string_array" }
       }
     },
     "integration_workflow": {

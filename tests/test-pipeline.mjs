@@ -68,7 +68,6 @@ function runEquivalentInput(extra = {}) {
     enforcement: { ok: true, mode: "blocking", source: "test", requested: "blocking" },
     diffText,
     trackedFiles: ["README.md", "src/existing.mjs"],
-    declaredChangeClass: null,
     initialChecks: [],
     ...extra,
   }, { quiet: true });
@@ -84,7 +83,6 @@ function buildEquivalentFacts(extra = {}) {
     enforcement: { ok: true, mode: "blocking", source: "test", requested: "blocking" },
     diffText,
     trackedFiles: ["README.md", "src/existing.mjs"],
-    declaredChangeClass: null,
     ...extra,
   });
 }

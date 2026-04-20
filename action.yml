@@ -51,13 +51,6 @@ inputs:
     required: false
     default: ""
 
-  change-class:
-    description: >
-      Named change class for surface_matrix enforcement (used with
-      `mode: check-diff`). Overrides change_class from a contract file when set.
-    required: false
-    default: ""
-
   node-version:
     description: "Node.js version to use when running repo-guard."
     required: false
@@ -130,9 +123,6 @@ runs:
           fi
           if [ -n "${{ inputs.contract }}" ]; then
             CMD="$CMD --contract ${{ inputs.contract }}"
-          fi
-          if [ -n "${{ inputs.change-class }}" ]; then
-            CMD="$CMD --change-class ${{ inputs.change-class }}"
           fi
         fi
 

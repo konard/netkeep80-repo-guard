@@ -16,12 +16,7 @@
     "change_type": {
       "type": "string",
       "minLength": 1,
-      "description": "Declared issue or change type. Repositories may attach policy constraints to this value with change_type_rules."
-    },
-    "change_class": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Optional named policy change class used by surface_matrix enforcement."
+      "description": "Declared issue or change type. Policies attach constraints to this value via change_profiles."
     },
     "scope": {
       "type": "array",

@@ -6,11 +6,12 @@ import { dirname, join, resolve } from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
+  checkRemovedContractFields,
+  checkRemovedPolicyFields,
   compileAnchorPolicy,
+  compileChangeProfiles,
   compileForbidRegex,
   compileIntegrationPolicy,
-  compileNewFilePolicy,
-  compileSurfacePolicy,
   warnReservedContractFields,
   warnReservedPolicyFields,
 } from "../src/policy-compiler.mjs";
@@ -107,34 +108,40 @@ describe("forbid_regex eager validation", () => {
   });
 });
 
-describe("surface policy compilation", () => {
-  it("accepts matrix references to declared surfaces and change classes", () => {
-    const errors = compileSurfacePolicy({
+describe("change_profiles compilation", () => {
+  it("accepts profiles that reference declared surfaces and new-file classes", () => {
+    const errors = compileChangeProfiles({
       surfaces: {
         kernel: ["src/**"],
         tests: ["tests/**"],
       },
-      change_classes: ["kernel-hardening"],
-      surface_matrix: {
-        "kernel-hardening": {
-          allow: ["kernel", "tests"],
-          forbid: [],
+      new_file_classes: {
+        test: ["tests/**"],
+        changelog_fragment: ["changelog.d/*.md"],
+      },
+      change_profiles: {
+        feature: {
+          allow_surfaces: ["kernel", "tests"],
+          forbid_surfaces: [],
+          new_files: {
+            allow_classes: ["test", "changelog_fragment"],
+            max_per_class: { test: 2 },
+          },
         },
       },
     });
     assert.equal(errors.length, 0);
   });
 
-  it("rejects matrix entries that reference unknown surfaces", () => {
-    const errors = compileSurfacePolicy({
+  it("rejects profiles that reference unknown surfaces", () => {
+    const errors = compileChangeProfiles({
       surfaces: {
         docs: ["docs/**"],
       },
-      change_classes: ["docs-cleanup"],
-      surface_matrix: {
-        "docs-cleanup": {
-          allow: ["docs", "kernel"],
-          forbid: ["generated"],
+      change_profiles: {
+        docs: {
+          allow_surfaces: ["docs", "kernel"],
+          forbid_surfaces: ["generated"],
         },
       },
     });
@@ -143,55 +150,34 @@ describe("surface policy compilation", () => {
     assert.ok(errors.some((e) => e.message.includes("generated")));
   });
 
-  it("rejects matrix entries that are not declared change classes", () => {
-    const errors = compileSurfacePolicy({
+  it("rejects surfaces listed in both allow_surfaces and forbid_surfaces", () => {
+    const errors = compileChangeProfiles({
       surfaces: {
         docs: ["docs/**"],
       },
-      change_classes: ["docs-cleanup"],
-      surface_matrix: {
-        release: {
-          allow: ["docs"],
-          forbid: [],
+      change_profiles: {
+        docs: {
+          allow_surfaces: ["docs"],
+          forbid_surfaces: ["docs"],
         },
       },
     });
     assert.equal(errors.length, 1);
-    assert.ok(errors[0].message.includes("change_classes"));
-  });
-});
-
-describe("new file policy compilation", () => {
-  it("accepts rules that reference declared classes and change classes", () => {
-    const errors = compileNewFilePolicy({
-      new_file_classes: {
-        test: ["tests/**"],
-        changelog_fragment: ["changelog.d/*.md"],
-      },
-      change_classes: ["kernel-hardening"],
-      new_file_rules: {
-        "kernel-hardening": {
-          allow_classes: ["test", "changelog_fragment"],
-          max_per_class: {
-            test: 2,
-          },
-        },
-      },
-    });
-    assert.equal(errors.length, 0);
+    assert.ok(errors[0].message.includes("both allow_surfaces and forbid_surfaces"));
   });
 
-  it("rejects rules that reference unknown classes", () => {
-    const errors = compileNewFilePolicy({
+  it("rejects new_files with unknown class references", () => {
+    const errors = compileChangeProfiles({
+      surfaces: { kernel: ["src/**"] },
       new_file_classes: {
         test: ["tests/**"],
       },
-      change_classes: ["kernel-hardening"],
-      new_file_rules: {
-        "kernel-hardening": {
-          allow_classes: ["test", "generated"],
-          max_per_class: {
-            changelog_fragment: 1,
+      change_profiles: {
+        feature: {
+          allow_surfaces: ["kernel"],
+          new_files: {
+            allow_classes: ["test", "generated"],
+            max_per_class: { changelog_fragment: 1 },
           },
         },
       },
@@ -201,32 +187,15 @@ describe("new file policy compilation", () => {
     assert.ok(errors.some((e) => e.message.includes("changelog_fragment")));
   });
 
-  it("rejects entries that are not declared change classes", () => {
-    const errors = compileNewFilePolicy({
-      new_file_classes: {
-        test: ["tests/**"],
-      },
-      change_classes: ["kernel-hardening"],
-      new_file_rules: {
-        "docs-cleanup": {
-          allow_classes: ["test"],
-        },
-      },
-    });
-    assert.equal(errors.length, 1);
-    assert.ok(errors[0].message.includes("change_classes"));
-  });
-
-  it("requires explicit allow_classes in every rule", () => {
-    const errors = compileNewFilePolicy({
-      new_file_classes: {
-        test: ["tests/**"],
-      },
-      change_classes: ["kernel-hardening"],
-      new_file_rules: {
-        "kernel-hardening": {
-          max_per_class: {
-            test: 1,
+  it("requires explicit allow_classes in every new_files block", () => {
+    const errors = compileChangeProfiles({
+      surfaces: { kernel: ["src/**"] },
+      new_file_classes: { test: ["tests/**"] },
+      change_profiles: {
+        feature: {
+          allow_surfaces: ["kernel"],
+          new_files: {
+            max_per_class: { test: 1 },
           },
         },
       },
@@ -236,19 +205,64 @@ describe("new file policy compilation", () => {
   });
 
   it("accepts empty allow_classes as explicit deny-all semantics", () => {
-    const errors = compileNewFilePolicy({
-      new_file_classes: {
-        test: ["tests/**"],
-      },
-      change_classes: ["docs-cleanup"],
-      new_file_rules: {
-        "docs-cleanup": {
-          allow_classes: [],
-          max_new_files: 0,
+    const errors = compileChangeProfiles({
+      surfaces: { docs: ["docs/**"] },
+      new_file_classes: { test: ["tests/**"] },
+      change_profiles: {
+        docs: {
+          allow_surfaces: ["docs"],
+          new_files: {
+            allow_classes: [],
+          },
         },
       },
     });
     assert.equal(errors.length, 0);
+  });
+
+  it("keeps policies without change_profiles compatible", () => {
+    const errors = compileChangeProfiles({ surfaces: { kernel: ["src/**"] } });
+    assert.equal(errors.length, 0);
+  });
+});
+
+describe("removed DSL defense-in-depth", () => {
+  it("rejects removed policy fields with actionable errors", () => {
+    const errors = checkRemovedPolicyFields({
+      change_classes: ["kernel-hardening"],
+      surface_matrix: { "kernel-hardening": { allow: [] } },
+      new_file_rules: { "kernel-hardening": { allow_classes: [] } },
+      change_type_rules: { feature: {} },
+      allow_unclassified_files: true,
+    });
+    assert.equal(errors.length, 5);
+    const fields = errors.map((e) => e.field).sort();
+    assert.deepEqual(fields, [
+      "allow_unclassified_files",
+      "change_classes",
+      "change_type_rules",
+      "new_file_rules",
+      "surface_matrix",
+    ]);
+    for (const error of errors) {
+      assert.ok(error.message.includes("was removed"));
+      assert.ok(error.message.includes("change_profiles"));
+    }
+  });
+
+  it("rejects removed contract fields with actionable errors", () => {
+    const errors = checkRemovedContractFields({
+      change_type: "feature",
+      change_class: "kernel-hardening",
+    });
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].field, "change_class");
+    assert.ok(errors[0].message.includes("change_type"));
+  });
+
+  it("returns no errors when the old fields are absent", () => {
+    assert.equal(checkRemovedPolicyFields({ change_profiles: {} }).length, 0);
+    assert.equal(checkRemovedContractFields({ change_type: "feature" }).length, 0);
   });
 });
 

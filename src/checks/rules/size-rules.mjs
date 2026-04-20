@@ -41,16 +41,9 @@ function matchingSizeRulePaths(paths, rule, options = {}) {
 
 function sizeRuleApplies(rule, options = {}) {
   const changeType = options.changeType || null;
-  const changeClass = options.changeClass || null;
   if (
     rule.applies_to_change_types &&
     !rule.applies_to_change_types.includes(changeType)
-  ) {
-    return false;
-  }
-  if (
-    rule.applies_to_change_classes &&
-    !rule.applies_to_change_classes.includes(changeClass)
   ) {
     return false;
   }
@@ -196,7 +189,6 @@ export const sizeRuleFamily = {
       readFile: facts.readFile,
       ignorePatterns: facts.policy.paths.operational_paths,
       changeType: facts.contract?.change_type,
-      changeClass: facts.declaredChangeClass,
     });
     const entries = [
       {

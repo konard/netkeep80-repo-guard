@@ -2,12 +2,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Ajv from "ajv";
 import {
+  checkRemovedPolicyFields,
   compileAnchorPolicy,
+  compileChangeProfiles,
   compileForbidRegex,
   compileIntegrationPolicy,
-  compileNewFilePolicy,
-  compileChangeTypePolicy,
-  compileSurfacePolicy,
   warnReservedPolicyFields,
 } from "../policy-compiler.mjs";
 import { resolvePolicyProfile } from "../policy-profiles.mjs";
@@ -63,11 +62,10 @@ export function loadPolicyRuntime(roots, options = {}) {
   const policy = profileResult.policy;
 
   const compileGroups = [
+    ["removed policy fields", checkRemovedPolicyFields(rawPolicy), (e) => e.message],
     ["profile compilation", profileResult.errors, (e) => e.message],
     ["forbid_regex compilation", compileForbidRegex(policy.content_rules), (e) => `[${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`],
-    ["surface policy compilation", compileSurfacePolicy(policy), (e) => e.message],
-    ["new file policy compilation", compileNewFilePolicy(policy), (e) => e.message],
-    ["change type policy compilation", compileChangeTypePolicy(policy), (e) => e.message],
+    ["change_profiles compilation", compileChangeProfiles(policy), (e) => e.message],
     ["anchor policy compilation", compileAnchorPolicy(policy), (e) => e.message],
     ["integration policy compilation", compileIntegrationPolicy(policy), (e) => e.message],
   ];
