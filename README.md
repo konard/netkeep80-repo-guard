@@ -735,13 +735,23 @@ repo-guard doctor --integration --format summary
 `.github/ISSUE_TEMPLATE/`, `templates/` и `action.yml`. Они не являются
 служебными исключениями и должны проходить обычную проверку политики PR.
 
-CI также запускает тестовый сценарий `advisory` для `check-diff`, чтобы
-проверять, что нарушения в режиме `advisory` видны в выводе, но не ломают
-задание.
+CI также запускает:
+
+- `npx repo-guard` — валидацию политики;
+- `npx repo-guard doctor` — диагностику самого репозитория;
+- `npx repo-guard validate-integration` — проверку integration-слоя;
+- `check-diff --enforcement advisory` на искусственном нарушении, чтобы
+  убедиться, что advisory-предупреждения видны, но не ломают задание.
 
 Собственный integration profile этого репозитория называется `self-hosting`;
 он документирует профиль, при котором `repo-guard` проверяет собственную
-политику, workflow, шаблоны и README как downstream-интеграцию.
+политику, workflow, шаблоны и README как downstream-интеграцию. Матрица
+покрытия всех surviving capabilities хранится в
+[`docs/self-hosting-coverage.md`](docs/self-hosting-coverage.md) и
+[`docs/self-hosting-coverage.json`](docs/self-hosting-coverage.json), а
+`tests/test-self-hosting.mjs` проверяет её автоматически: каждая surviving
+возможность должна быть использована на этом репо или явно помечена
+`not_self_hosted` с письменным объяснением.
 
 ## Разработка
 

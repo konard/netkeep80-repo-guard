@@ -58,7 +58,8 @@
         "must_reference_files": [
           "repo-policy.json",
           ".github/PULL_REQUEST_TEMPLATE.md",
-          ".github/ISSUE_TEMPLATE/change-contract.yml"
+          ".github/ISSUE_TEMPLATE/change-contract.yml",
+          "docs/self-hosting-coverage.md"
         ],
         "must_mention_profiles": ["self-hosting"],
         "must_mention_contract_fields": ["change_type", "scope", "anchors.affects"]
@@ -94,6 +95,96 @@
       ".gitkeep"
     ]
   },
+  "surfaces": {
+    "source": ["src/**"],
+    "tests": ["tests/**"],
+    "schemas": ["schemas/**"],
+    "docs": ["docs/**", "README.md", "RELEASING.md"],
+    "examples": ["examples/**"],
+    "templates": ["templates/**"],
+    "scripts": ["scripts/**"],
+    "governance": [
+      "repo-policy.json",
+      "action.yml",
+      "package.json",
+      "package-lock.json",
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".github/ISSUE_TEMPLATE/**"
+    ],
+    "workflows": [".github/workflows/**"]
+  },
+  "new_file_classes": {
+    "source": ["src/**"],
+    "test": ["tests/**"],
+    "doc": ["docs/**", "README.md", "RELEASING.md"],
+    "example": ["examples/**"],
+    "template": ["templates/**"],
+    "schema": ["schemas/**"],
+    "script": ["scripts/**"],
+    "governance": [
+      "repo-policy.json",
+      "action.yml",
+      "package.json",
+      "package-lock.json",
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".github/ISSUE_TEMPLATE/**"
+    ],
+    "workflow": [".github/workflows/**"]
+  },
+  "change_profiles": {
+    "feature": {
+      "allow_unclassified_surfaces": true,
+      "new_files": {
+        "allow_classes": [
+          "source",
+          "test",
+          "doc",
+          "example",
+          "template",
+          "schema",
+          "script",
+          "governance",
+          "workflow"
+        ]
+      }
+    },
+    "bugfix": {
+      "allow_unclassified_surfaces": true,
+      "new_files": {
+        "allow_classes": ["source", "test", "doc", "example", "schema", "script"]
+      }
+    },
+    "refactor": {
+      "allow_unclassified_surfaces": true,
+      "new_files": {
+        "allow_classes": ["source", "test", "doc", "script"]
+      }
+    },
+    "docs": {
+      "allow_surfaces": ["docs", "examples", "templates"],
+      "allow_unclassified_surfaces": false,
+      "new_files": {
+        "allow_classes": ["doc", "example", "template"]
+      }
+    },
+    "test": {
+      "allow_unclassified_surfaces": true,
+      "new_files": {
+        "allow_classes": ["test", "doc"]
+      }
+    }
+  },
+  "size_rules": [
+    {
+      "id": "max-source-file-lines",
+      "scope": "file",
+      "metric": "lines",
+      "glob": "src/**/*.mjs",
+      "max": 900,
+      "count": "all_tracked",
+      "level": "advisory"
+    }
+  ],
   "diff_rules": {
     "max_new_docs": 2,
     "max_new_files": 15,

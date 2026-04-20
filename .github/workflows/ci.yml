@@ -31,6 +31,18 @@ jobs:
       - name: Validate repo-policy.json
         run: npx repo-guard
 
+      - name: Run validate-integration on self
+        # Self-host the integration diagnostic so drift in declared workflows,
+        # templates, docs, or profiles fails the same CI that protects the rules.
+        run: npx repo-guard validate-integration
+
+      - name: Run doctor diagnostics on self
+        # Self-host the doctor diagnostic so repo-level drift (missing token,
+        # shallow fetch, malformed policy) surfaces before downstream users hit it.
+        run: npx repo-guard doctor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run schema tests
         run: npm run test:schemas
 

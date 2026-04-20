@@ -1,0 +1,155 @@
+{
+  "$comment": "Machine-checkable map from surviving repo-guard capabilities to the place where repo-guard uses them on itself. Loaded by tests/test-self-hosting.mjs. Every surviving capability must appear here with status 'self_used' and a concrete self_use reference, or with status 'not_self_hosted' and a written rationale. See docs/self-hosting-coverage.md for the human-readable version.",
+  "schema_version": "1.0.0",
+  "capabilities": {
+    "top_level_commands": {
+      "validate": {
+        "status": "self_used",
+        "self_use": ".github/workflows/ci.yml:Validate repo-policy.json",
+        "notes": "CI runs 'npx repo-guard' (default validate) before other checks."
+      },
+      "check-pr": {
+        "status": "self_used",
+        "self_use": ".github/workflows/ci.yml:Run PR policy check",
+        "notes": "CI runs repo-guard against every non-draft PR via uses: ./ in blocking mode."
+      },
+      "check-diff": {
+        "status": "self_used",
+        "self_use": ".github/workflows/ci.yml:Exercise advisory policy mode",
+        "notes": "Advisory fixture exercises check-diff end to end with --enforcement advisory."
+      },
+      "init": {
+        "status": "self_used",
+        "self_use": "tests/test-init.mjs",
+        "notes": "init scaffolding is exercised by its own integration test; it is not run against this repo because the repo already has hand-authored governance files."
+      },
+      "doctor": {
+        "status": "self_used",
+        "self_use": ".github/workflows/ci.yml:Run doctor diagnostics on self",
+        "notes": "CI runs 'npx repo-guard doctor' against this repo so doctor drift surfaces in the same place as policy drift."
+      },
+      "validate-integration": {
+        "status": "self_used",
+        "self_use": ".github/workflows/ci.yml:Run validate-integration on self",
+        "notes": "CI runs 'npx repo-guard validate-integration' against this repo to ensure declared integration wiring stays valid."
+      }
+    },
+    "enforcement_modes": {
+      "blocking": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:enforcement.mode",
+        "notes": "Repo-policy declares blocking; CI PR gate also passes enforcement: blocking explicitly."
+      },
+      "advisory": {
+        "status": "self_used",
+        "self_use": ".github/workflows/ci.yml:Exercise advisory policy mode",
+        "notes": "CI exercises advisory mode end to end, asserting WARN output and exit code 0."
+      }
+    },
+    "contract_extraction": {
+      "repo-guard-yaml_in_pr_body": {
+        "status": "self_used",
+        "self_use": ".github/PULL_REQUEST_TEMPLATE.md",
+        "notes": "PR template carries a repo-guard-yaml fenced block; check-pr parses it from the PR body."
+      },
+      "repo-guard-yaml_in_linked_issue": {
+        "status": "self_used",
+        "self_use": ".github/ISSUE_TEMPLATE/change-contract.yml",
+        "notes": "Issue form carries a fenced repo-guard-yaml block so PRs that 'Fixes #N' can inherit a contract."
+      },
+      "repo-guard-json_in_pr_body": {
+        "status": "not_self_hosted",
+        "rationale": "YAML is the canonical form we advertise; JSON remains supported for external users and is covered by tests/test-markdown-contract.mjs. Keeping a second fenced block in our own template would be fake coverage."
+      }
+    },
+    "integration_checks": {
+      "integration.workflows": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:integration.workflows[0]",
+        "notes": "Declares ci-pr-policy-check as repo_guard_pr_gate with a full expect block."
+      },
+      "integration.templates[markdown]": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:integration.templates[pull-request-template]",
+        "notes": "PR template is declared and validated; required_block_kind and required_contract_fields are exercised."
+      },
+      "integration.templates[github_issue_form]": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:integration.templates[change-contract-issue-form]",
+        "notes": "Issue form is declared as optional template with required_block_kind and required_contract_fields."
+      },
+      "integration.docs": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:integration.docs[readme]",
+        "notes": "README is declared with must_mention, must_reference_files, must_mention_profiles, and must_mention_contract_fields."
+      },
+      "integration.profiles": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:integration.profiles[self-hosting]",
+        "notes": "self-hosting profile is declared and referenced from README."
+      }
+    },
+    "rule_families": {
+      "forbidden-paths": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:paths.forbidden",
+        "notes": "Forbids docs/phase-*, docs/history-*, and *.bak."
+      },
+      "diff_rules_budgets": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:diff_rules",
+        "notes": "max_new_docs, max_new_files, and max_net_added_lines are set."
+      },
+      "content-rules": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:content_rules[no-todo-without-issue]",
+        "notes": "Forbids bare to-do markers without an issue reference on added lines."
+      },
+      "cochange-rules": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:cochange_rules[0]",
+        "notes": "Requires tests/** whenever src/** changes."
+      },
+      "surfaces": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:surfaces",
+        "notes": "Declares named surfaces for src, tests, schemas, docs, examples, templates, governance, and workflows."
+      },
+      "new_file_classes": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:new_file_classes",
+        "notes": "Declares source, test, doc, example, template, schema, governance, and workflow new-file classes."
+      },
+      "change_profiles": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:change_profiles",
+        "notes": "Declares profiles for feature, bugfix, refactor, docs, and test change_types."
+      },
+      "size_rules": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:size_rules[max-source-file-lines]",
+        "notes": "Advisory drift detector for src/**/*.mjs so growth in a single module surfaces in CI before it blocks."
+      },
+      "registry_rules": {
+        "status": "not_self_hosted",
+        "rationale": "repo-guard does not maintain a canonical list that cross-checks JSON against Markdown in its own source tree. Every realistic self-use we considered would be fake coverage; the capability is covered by tests/test-rule-registry.mjs and downstream examples."
+      },
+      "advisory_text_rules": {
+        "status": "not_self_hosted",
+        "rationale": "We intentionally keep README as the single canonical doc; synthetic duplicate markdown would be fake coverage. The rule family is covered by its own tests."
+      },
+      "anchors": {
+        "status": "not_self_hosted",
+        "rationale": "This repo does not carry requirement JSON files or @req-style anchors in source, so declaring anchor types would only extract empty sets. Anchors are exercised by tests/test-anchor-extractors.mjs and documented for downstream use."
+      },
+      "trace_rules": {
+        "status": "not_self_hosted",
+        "rationale": "Trace rules depend on anchor declarations; see 'anchors'. Exercised by tests/test-trace-evidence-rules.mjs and examples/downstream-integration-policy.json."
+      },
+      "profile_requirements-strict": {
+        "status": "not_self_hosted",
+        "rationale": "The built-in profile requires requirements/*.json canonical files which this tooling repo does not have. Adding a fake requirements/ directory would be the exact fake coverage this dogfooding effort rejects. Covered by docs/requirements-strict-profile.md and tests/test-policy-profiles.mjs."
+      }
+    }
+  }
+}
