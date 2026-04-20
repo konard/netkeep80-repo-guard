@@ -11,6 +11,7 @@
     "src/",
     "schemas/",
     "templates/",
+    "scripts/",
     "docs/",
     "examples/",
     "README.md",
@@ -18,7 +19,7 @@
   ],
   "scripts": {
     "validate": "node src/repo-guard.mjs",
-    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-anchor-extractors.mjs && node tests/test-integration-extractors.mjs && node tests/test-integration-diagnostics.mjs && node tests/test-integration-fixtures.mjs && node tests/test-trace-evidence-rules.mjs && node tests/test-policy-profiles.mjs && node tests/test-repo-root.mjs && node tests/test-init.mjs && node tests/test-doctor.mjs && node tests/test-enforcement-mode.mjs && node tests/test-structured-output.mjs && node tests/test-pipeline.mjs && node tests/test-self-hosting.mjs",
+    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-anchor-extractors.mjs && node tests/test-integration-extractors.mjs && node tests/test-integration-diagnostics.mjs && node tests/test-integration-fixtures.mjs && node tests/test-trace-evidence-rules.mjs && node tests/test-policy-profiles.mjs && node tests/test-repo-root.mjs && node tests/test-init.mjs && node tests/test-release-ref.mjs && node tests/test-doctor.mjs && node tests/test-enforcement-mode.mjs && node tests/test-structured-output.mjs && node tests/test-pipeline.mjs && node tests/test-self-hosting.mjs",
     "test:hardening": "node tests/test-hardening.mjs",
     "test:anchors": "node tests/test-anchor-extractors.mjs",
     "test:integration": "node tests/test-integration-extractors.mjs",
@@ -32,11 +33,14 @@
     "test:contract": "node tests/test-markdown-contract.mjs",
     "test:github-pr": "node tests/test-github-pr.mjs",
     "test:init": "node tests/test-init.mjs",
+    "test:release-ref": "node tests/test-release-ref.mjs",
     "test:doctor": "node tests/test-doctor.mjs",
     "test:enforcement": "node tests/test-enforcement-mode.mjs",
     "test:structured-output": "node tests/test-structured-output.mjs",
     "test:pipeline": "node tests/test-pipeline.mjs",
-    "test:self-hosting": "node tests/test-self-hosting.mjs"
+    "test:self-hosting": "node tests/test-self-hosting.mjs",
+    "verify:release-ref": "node scripts/verify-release-ref.mjs",
+    "prepublishOnly": "npm run verify:release-ref"
   },
   "keywords": [
     "repo-policy",

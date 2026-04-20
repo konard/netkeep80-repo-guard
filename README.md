@@ -51,6 +51,9 @@ repo-guard init --preset application --mode advisory
 Сгенерированный workflow pin-ит Action на release tag установленной версии
 `repo-guard` (`netkeep80/repo-guard@v<version>`), а не на ветку `main`.
 При обновлении инструмента меняйте этот ref на новый release tag осознанно.
+Для поддерживающих релизы это инвариант: `package.json.version` должен
+соответствовать опубликованному GitHub tag/release `v<version>` до публикации
+npm-пакета. Подробный чеклист и проверка описаны в `RELEASING.md`.
 
 Пресеты:
 

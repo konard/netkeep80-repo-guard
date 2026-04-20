@@ -70,6 +70,9 @@ jobs:
       - name: Run init scaffolding tests
         run: npm run test:init
 
+      - name: Run release ref verifier tests
+        run: npm run test:release-ref
+
       - name: Run doctor diagnostics tests
         run: npm run test:doctor
         env:
