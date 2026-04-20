@@ -1,8 +1,14 @@
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { execSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { loadGitHubEvent, resolvePRContractFacts } from "../src/github-pr.mjs";
 import { resolveContract, extractLinkedIssueNumbers } from "../src/markdown-contract.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(__dirname, "..");
+const repoGuard = resolve(projectRoot, "src/repo-guard.mjs");
 
 let failures = 0;
 
@@ -13,6 +19,44 @@ function expect(label, actual, expected) {
     failures++;
     console.error(`  expected: ${JSON.stringify(expected)}, got: ${JSON.stringify(actual)}`);
   }
+}
+
+function runRepoGuard(args, opts = {}) {
+  return spawnSync(process.execPath, [repoGuard, ...args], {
+    cwd: opts.cwd || projectRoot,
+    env: opts.env || process.env,
+    encoding: "utf-8",
+  });
+}
+
+function initTinyRepo(prefix) {
+  const tmp = mkdtempSync(join(tmpdir(), prefix));
+  execSync("git init", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.email test@test.com", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.name Test", { cwd: tmp, stdio: "pipe" });
+
+  const policy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: {
+      forbidden: [],
+      canonical_docs: ["README.md"],
+      governance_paths: ["repo-policy.json"],
+    },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(policy));
+  writeFileSync(join(tmp, "a.txt"), "a\nb\n");
+  execSync("git add -A", { cwd: tmp, stdio: "pipe" });
+  execSync("git commit -m init", { cwd: tmp, stdio: "pipe" });
+
+  writeFileSync(join(tmp, "a.txt"), "a\n");
+  execSync("git add -A", { cwd: tmp, stdio: "pipe" });
+  execSync("git commit -m second", { cwd: tmp, stdio: "pipe" });
+
+  return tmp;
 }
 
 // --- loadGitHubEvent ---
@@ -173,6 +217,33 @@ Feature request.
   expect("integration missing: adapter ok", facts.ok, false);
   expect("integration missing: adapter error", facts.error, "fallback_missing");
   expect("integration missing: adapter source", facts.contractSource, "none");
+}
+
+// --- check-pr passes shell-looking event refs to git without executing them ---
+
+{
+  const tmp = initTinyRepo("rg-ref-injection-pr-");
+  const marker = join(tmp, "check-pr-injected");
+  const eventFile = join(tmp, "event.json");
+  writeFileSync(eventFile, JSON.stringify({
+    pull_request: {
+      number: 42,
+      base: { sha: `HEAD~1; touch ${marker}; #` },
+      head: { sha: "HEAD" },
+      body: "```repo-guard-json\n{\"change_type\":\"bugfix\",\"scope\":[\"a.txt\"],\"budgets\":{\"max_new_files\":0,\"max_net_added_lines\":500},\"must_touch\":[\"a.txt\"],\"must_not_touch\":[],\"expected_effects\":[\"test\"]}\n```",
+    },
+    repository: { full_name: "owner/repo" },
+  }));
+
+  const result = runRepoGuard(["--repo-root", tmp, "check-pr"], {
+    env: { ...process.env, GITHUB_EVENT_PATH: eventFile },
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  expect("check-pr rejects shell-looking base ref", result.status, 1);
+  expect("check-pr reports git diff failure", output.includes("git diff failed"), true);
+  expect("check-pr does not execute injected command", existsSync(marker), false);
+
+  rmSync(tmp, { recursive: true });
 }
 
 console.log(`\n${failures === 0 ? "All tests passed" : `${failures} test(s) failed`}`);

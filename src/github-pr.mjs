@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { getDiff, validateGitDiffRefs } from "./git.mjs";
+import { getDiff } from "./git.mjs";
 import { extractContract, extractLinkedIssueNumbers, resolveContract } from "./markdown-contract.mjs";
 import { warnReservedContractFields } from "./policy-compiler.mjs";
 import { resolveEnforcementMode } from "./enforcement.mjs";
@@ -66,6 +66,11 @@ export function checkPrerequisites() {
   } catch {
     missing.push("git CLI (required for diff analysis)");
   }
+  return missing;
+}
+
+export function checkIssueFallbackPrerequisites() {
+  const missing = [];
   try {
     execFileSync("gh", ["--version"], { encoding: "utf-8", stdio: "pipe" });
   } catch {
@@ -140,7 +145,7 @@ export function runCheckPR(roots, args = []) {
     console.error("ERROR: check-pr prerequisites not met:");
     for (const p of prereqs) console.error(`  - ${p}`);
     console.error("\ncheck-pr expects to run inside a GitHub Actions pull_request workflow.");
-    console.error("Required: GITHUB_EVENT_PATH, git with sufficient fetch depth, gh CLI with auth token.");
+    console.error("Required: GITHUB_EVENT_PATH and git with sufficient fetch depth.");
     process.exit(1);
   }
 
@@ -151,13 +156,8 @@ export function runCheckPR(roots, args = []) {
   }
 
   const { base, head, prBody, prNumber, repoFullName } = eventInfo;
-  const refCheck = validateGitDiffRefs(base, head, {
-    baseLabel: "pull_request.base.sha",
-    headLabel: "pull_request.head.sha",
-    requireBoth: true,
-  });
-  if (!refCheck.ok) {
-    console.error(`ERROR: ${refCheck.message}`);
+  if (!base || !head) {
+    console.error("ERROR: pull_request event missing base/head SHA");
     process.exit(1);
   }
   console.log(`PR #${prNumber}: checking contract and diff (${base?.slice(0, 7)}..${head?.slice(0, 7)})`);
@@ -184,6 +184,12 @@ export function runCheckPR(roots, args = []) {
       // Handled by resolvePRContractFacts after preserving linked issue diagnostics.
     } else if (linkedIssues.length === 1) {
       console.log(`No contract in PR body; trying linked issue #${linkedIssues[0]}...`);
+      const fallbackPrereqs = checkIssueFallbackPrerequisites();
+      if (fallbackPrereqs.length > 0) {
+        console.error("ERROR: linked issue fallback prerequisites not met:");
+        for (const p of fallbackPrereqs) console.error(`  - ${p}`);
+        process.exit(1);
+      }
       issueBody = fetchIssueBody(repoFullName, linkedIssues[0]);
     }
   }

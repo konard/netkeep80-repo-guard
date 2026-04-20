@@ -286,12 +286,12 @@ console.log("\n--- event context adapts to environment ---");
   }
 }
 
-// --- gh-cli is FAIL (not WARN) when missing; auth-token is WARN (not FAIL) when missing ---
+// --- gh/auth are optional unless linked-issue fallback is used ---
 
-console.log("\n--- gh-cli and auth-token severity matches check-pr ---");
+console.log("\n--- gh/auth are optional unless linked-issue fallback is used ---");
 {
   const { stdout } = runDoctor("doctor");
-  expectNotIncludes("gh-cli is never WARN (must be PASS or FAIL)", stdout, "WARN: gh-cli");
+  expectNotIncludes("gh-cli absence is never a hard failure", stdout, "FAIL: gh-cli");
   expectNotIncludes("auth-token is never FAIL (auth only needed for linked-issue fallback)", stdout, "FAIL: auth-token");
 }
 

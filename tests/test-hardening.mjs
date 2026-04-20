@@ -1,5 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { execSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   compileAnchorPolicy,
   compileForbidRegex,
@@ -10,10 +15,51 @@ import {
   warnReservedPolicyFields,
 } from "../src/policy-compiler.mjs";
 import { checkMustTouch } from "../src/diff-checker.mjs";
-import { checkPrerequisites } from "../src/github-pr.mjs";
+import { checkIssueFallbackPrerequisites, checkPrerequisites } from "../src/github-pr.mjs";
 
 // Build test patterns without triggering the no-todo-without-issue content rule
 const td = "TO" + "DO"; // eslint-disable-line prefer-template
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(__dirname, "..");
+const repoGuard = resolve(projectRoot, "src/repo-guard.mjs");
+
+function runRepoGuard(args, opts = {}) {
+  return spawnSync(process.execPath, [repoGuard, ...args], {
+    cwd: opts.cwd || projectRoot,
+    env: opts.env || process.env,
+    encoding: "utf-8",
+  });
+}
+
+function initTinyRepo(prefix) {
+  const tmp = mkdtempSync(join(tmpdir(), prefix));
+  execSync("git init", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.email test@test.com", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.name Test", { cwd: tmp, stdio: "pipe" });
+
+  const policy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: {
+      forbidden: [],
+      canonical_docs: ["README.md"],
+      governance_paths: ["repo-policy.json"],
+    },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(policy));
+  writeFileSync(join(tmp, "a.txt"), "a\nb\n");
+  execSync("git add -A", { cwd: tmp, stdio: "pipe" });
+  execSync("git commit -m init", { cwd: tmp, stdio: "pipe" });
+
+  writeFileSync(join(tmp, "a.txt"), "a\n");
+  execSync("git add -A", { cwd: tmp, stdio: "pipe" });
+  execSync("git commit -m second", { cwd: tmp, stdio: "pipe" });
+
+  return tmp;
+}
 
 describe("forbid_regex eager validation", () => {
   it("accepts valid regex patterns", () => {
@@ -750,11 +796,59 @@ describe("check-pr prerequisites", () => {
     }
   });
 
-  it("git and gh are available in test environment", () => {
+  it("requires git but not gh at startup", () => {
     const missing = checkPrerequisites();
     const gitMissing = missing.some((m) => m.includes("git CLI"));
     const ghMissing = missing.some((m) => m.includes("gh CLI"));
     assert.equal(gitMissing, false, "git should be available");
-    assert.equal(ghMissing, false, "gh should be available");
+    assert.equal(ghMissing, false, "gh is only needed for linked issue fallback");
+  });
+
+  it("does not report gh missing before linked-issue fallback is needed", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "rg-no-gh-prereq-"));
+    const fakeGit = join(tmp, "git");
+    writeFileSync(fakeGit, "#!/bin/sh\nprintf 'git version 2.0.0\\n'\n");
+    chmodSync(fakeGit, 0o755);
+
+    const originalPath = process.env.PATH;
+    const originalEvent = process.env.GITHUB_EVENT_PATH;
+    process.env.PATH = tmp;
+    process.env.GITHUB_EVENT_PATH = join(tmp, "event.json");
+    try {
+      const missing = checkPrerequisites();
+      assert.equal(missing.some((m) => m.includes("git CLI")), false);
+      assert.equal(missing.some((m) => m.includes("gh CLI")), false);
+      assert.equal(checkIssueFallbackPrerequisites().some((m) => m.includes("gh CLI")), true);
+    } finally {
+      process.env.PATH = originalPath;
+      if (originalEvent !== undefined) process.env.GITHUB_EVENT_PATH = originalEvent;
+      else delete process.env.GITHUB_EVENT_PATH;
+      rmSync(tmp, { recursive: true });
+    }
+  });
+});
+
+describe("check-diff command execution hardening", () => {
+  it("passes shell-looking refs as git arguments without executing them", () => {
+    const tmp = initTinyRepo("rg-ref-injection-diff-");
+    try {
+      const marker = join(tmp, "check-diff-injected");
+      const result = runRepoGuard([
+        "check-diff",
+        "--repo-root",
+        tmp,
+        "--base",
+        `HEAD~1; touch ${marker}; #`,
+        "--head",
+        "HEAD",
+      ]);
+      const output = `${result.stdout || ""}${result.stderr || ""}`;
+
+      assert.equal(result.status, 1);
+      assert.match(output, /git diff failed/);
+      assert.equal(existsSync(marker), false);
+    } finally {
+      rmSync(tmp, { recursive: true });
+    }
   });
 });

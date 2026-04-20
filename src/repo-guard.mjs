@@ -3,7 +3,7 @@
 import { realpathSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getDiff, validateGitDiffRefs } from "./git.mjs";
+import { getDiff } from "./git.mjs";
 import {
   warnReservedContractFields,
 } from "./policy-compiler.mjs";
@@ -79,13 +79,6 @@ function runCheckDiff(roots, args) {
 
   if (!["text", "json", "summary"].includes(format)) {
     console.error(`Unknown check-diff format: ${format}`);
-    console.error(CHECK_DIFF_USAGE);
-    process.exit(1);
-  }
-
-  const refCheck = validateGitDiffRefs(base, head);
-  if (!refCheck.ok) {
-    console.error(`Error: ${refCheck.message}`);
     console.error(CHECK_DIFF_USAGE);
     process.exit(1);
   }

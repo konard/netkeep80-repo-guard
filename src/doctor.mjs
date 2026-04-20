@@ -180,7 +180,7 @@ function checkGhCli() {
       const version = execFileSync("gh", ["--version"], { encoding: "utf-8", stdio: "pipe" }).trim().split("\n")[0];
       return { name: "gh-cli", status: PASS, message: version };
     } catch {
-      return { name: "gh-cli", status: FAIL, message: "gh CLI not found", hint: "Install gh CLI — check-pr requires it for linked-issue fallback: https://cli.github.com/" };
+      return { name: "gh-cli", status: WARN, message: "gh CLI not found", hint: "Install gh CLI if check-pr must fall back to a linked issue: https://cli.github.com/" };
     }
   });
 }
