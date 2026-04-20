@@ -58,6 +58,9 @@ jobs:
       - name: Run trace evidence rule tests
         run: npm run test:trace-evidence
 
+      - name: Run policy profile tests
+        run: npm run test:profiles
+
       - name: Run repo-root separation tests
         run: npm run test:repo-root
 

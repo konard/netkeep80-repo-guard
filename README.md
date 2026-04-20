@@ -268,6 +268,8 @@ jobs:
 | `change_type_rules` | Задает правила по `change_type`: области, лимиты и классы новых файлов |
 | `registry_rules` | Сверяет канонические списки из JSON или Markdown |
 | `advisory_text_rules` | Предупреждает о похожей Markdown-документации, но не блокирует |
+| `profile` | Подключает встроенный профиль политики перед runtime-проверками |
+| `profile_overrides` | Уточняет поддерживаемые параметры встроенного профиля |
 | `anchors` | Извлекает якоря трассировки из regex или источников JSON-полей |
 | `trace_rules` | Проверяет разрешение якорей и наличие файлов-подтверждений |
 | `integration` | Декларативно описывает downstream-интеграцию: workflows, templates, docs и profiles |
@@ -284,6 +286,80 @@ jobs:
 областям, файл без подходящей области по умолчанию считается нарушением. Для
 `surface_matrix` можно явно разрешить частичное покрытие через
 `allow_unclassified_files: true`.
+
+## Профили политики
+
+`profile` включает встроенный набор `anchors` и `trace_rules`, который
+`repo-guard` разворачивает после schema validation и до компиляции политики.
+Сейчас поддерживается профиль `requirements-strict` для репозиториев, где JSON
+requirements являются каноническими trace anchors.
+
+Минимальная форма:
+
+```json
+{
+  "policy_format_version": "0.3.0",
+  "repository_kind": "library",
+  "profile": "requirements-strict",
+  "profile_overrides": {
+    "strict_heading_docs": [
+      "docs/architecture.md",
+      "docs/pmm_requirements.md"
+    ],
+    "evidence_surfaces": [
+      "include/**",
+      "src/**",
+      "tests/**",
+      "examples/**",
+      "docs/**",
+      "README.md",
+      "requirements/README.md",
+      "scripts/**",
+      ".github/workflows/**"
+    ]
+  },
+  "paths": {
+    "forbidden": ["*.bak"],
+    "canonical_docs": ["README.md", "requirements/README.md"],
+    "governance_paths": ["repo-policy.json"],
+    "operational_paths": [".claude/**"]
+  },
+  "diff_rules": {
+    "max_new_docs": 2,
+    "max_new_files": 12,
+    "max_net_added_lines": 1200
+  },
+  "content_rules": [],
+  "cochange_rules": []
+}
+```
+
+`requirements-strict` разворачивает canonical requirement IDs из
+`requirements/{business,stakeholder,functional,nonfunctional,constraints,interface}/*.json`,
+проверяет ссылки на requirement IDs в JSON, коде и Markdown, требует
+bracketed requirement links в строгих heading docs и применяет evidence rules
+для измененных requirements и `anchors.affects` / `anchors.implements` /
+`anchors.verifies`.
+
+Поддерживаемые `profile_overrides`:
+
+| Поле | Что уточняет |
+| --- | --- |
+| `requirement_json_globs` | JSON-файлы требований для canonical IDs и JSON trace refs |
+| `code_reference_globs` | Файлы кода, тестов, скриптов и examples для `@req` refs |
+| `doc_reference_globs` | Markdown-файлы для обычных requirement refs |
+| `strict_heading_docs` | Markdown-файлы, где headings обязаны иметь `[REQ-000]` |
+| `evidence_surfaces` | Общие evidence paths для changed requirements и affected anchors |
+| `changed_requirement_evidence_surfaces` | Evidence paths только для changed requirement JSON |
+| `affected_evidence_surfaces` | Evidence paths только для `anchors.affects` |
+| `implementation_evidence_surfaces` | Evidence paths только для `anchors.implements` |
+| `verification_evidence_surfaces` | Evidence paths только для `anchors.verifies` |
+
+Если политика уже содержит явные `anchors` или `trace_rules`, эти развернутые
+поля остаются валидными и имеют приоритет над generated section профиля. Это
+сохраняет backward compatibility для репозиториев, которые уже хранят expanded
+policy вручную. Подробный контракт профиля описан в
+[`docs/requirements-strict-profile.md`](docs/requirements-strict-profile.md).
 
 ## Интеграционный слой
 

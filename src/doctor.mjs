@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import Ajv from "ajv";
 import { compileAnchorPolicy, compileForbidRegex, compileIntegrationPolicy } from "./policy-compiler.mjs";
+import { resolvePolicyProfile } from "./policy-profiles.mjs";
 
 const PASS = "PASS";
 const WARN = "WARN";
@@ -95,25 +96,34 @@ function checkPolicyDiscovery(repoRoot, packageRoot) {
       return { name: "repo-policy.json", status: FAIL, message: `Schema validation failed: ${errors}${integrationDetails}`, hint: "Fix the policy to match the schema — see schemas/repo-policy.schema.json" };
     }
 
-    const regexErrors = compileForbidRegex(policy.content_rules || []);
+    const profileResult = resolvePolicyProfile(policy);
+    if (!profileResult.ok) {
+      const details = profileResult.errors.map(e => e.message).join("; ");
+      return { name: "repo-policy.json", status: FAIL, message: `Invalid profile policy: ${details}`, hint: "Fix profile and profile_overrides in repo-policy.json" };
+    }
+
+    const effectivePolicy = profileResult.policy;
+
+    const regexErrors = compileForbidRegex(effectivePolicy.content_rules || []);
     if (regexErrors.length > 0) {
       const details = regexErrors.map(e => `[${e.rule_id}] /${e.pattern}/: ${e.message}`).join("; ");
       return { name: "repo-policy.json", status: FAIL, message: `Invalid forbid_regex: ${details}`, hint: "Fix the regular expressions in content_rules" };
     }
 
-    const anchorErrors = compileAnchorPolicy(policy);
+    const anchorErrors = compileAnchorPolicy(effectivePolicy);
     if (anchorErrors.length > 0) {
       const details = anchorErrors.map(e => e.message).join("; ");
       return { name: "repo-policy.json", status: FAIL, message: `Invalid anchor policy: ${details}`, hint: "Fix anchors and trace_rules references in repo-policy.json" };
     }
 
-    const integrationErrors = compileIntegrationPolicy(policy);
+    const integrationErrors = compileIntegrationPolicy(effectivePolicy);
     if (integrationErrors.length > 0) {
       const details = integrationErrors.map(e => e.message).join("; ");
       return { name: "repo-policy.json", status: FAIL, message: `Invalid integration policy: ${details}`, hint: "Fix integration ids, kinds, roles, required fields, and profile references in repo-policy.json" };
     }
 
-    return { name: "repo-policy.json", status: PASS, message: `Valid (${policy.repository_kind}, format ${policy.policy_format_version})` };
+    const profileSuffix = effectivePolicy.profile ? `, profile ${effectivePolicy.profile}` : "";
+    return { name: "repo-policy.json", status: PASS, message: `Valid (${effectivePolicy.repository_kind}, format ${effectivePolicy.policy_format_version}${profileSuffix})` };
   });
 }
 

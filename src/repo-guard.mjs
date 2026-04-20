@@ -1,19 +1,11 @@
 #!/usr/bin/env node
 
-import { readFileSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import Ajv from "ajv";
 import {
-  compileAnchorPolicy,
-  compileChangeTypePolicy,
-  compileForbidRegex,
-  compileIntegrationPolicy,
-  compileNewFilePolicy,
-  compileSurfacePolicy,
   warnReservedContractFields,
-  warnReservedPolicyFields,
 } from "./policy-compiler.mjs";
 import {
   resolveEnforcementMode,
@@ -165,40 +157,9 @@ function runCheckDiff(roots, args) {
 }
 
 function runValidate(roots, args) {
-  const policySchemaPath = resolve(roots.packageRoot, "schemas/repo-policy.schema.json");
-  const contractSchemaPath = resolve(roots.packageRoot, "schemas/change-contract.schema.json");
-  const policyPath = resolve(roots.repoRoot, "repo-policy.json");
-
-  const policySchema = loadJSON(policySchemaPath);
-  const contractSchema = loadJSON(contractSchemaPath);
-  const policy = loadJSON(policyPath);
-
-  const ajv = new Ajv({ allErrors: true });
-
-  let ok = true;
-  ok = validate(ajv, policySchema, policy, "repo-policy.json") && ok;
-
-  const compileGroups = [
-    ["forbid_regex compilation", compileForbidRegex(policy.content_rules), (e) => `[${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`],
-    ["surface policy compilation", compileSurfacePolicy(policy), (e) => e.message],
-    ["new file policy compilation", compileNewFilePolicy(policy), (e) => e.message],
-    ["change type policy compilation", compileChangeTypePolicy(policy), (e) => e.message],
-    ["anchor policy compilation", compileAnchorPolicy(policy), (e) => e.message],
-    ["integration policy compilation", compileIntegrationPolicy(policy), (e) => e.message],
-  ];
-
-  for (const [label, errors, format] of compileGroups) {
-    if (errors.length === 0) continue;
-    ok = false;
-    console.error(`FAIL: ${label}`);
-    for (const error of errors) {
-      console.error(`  ${format(error)}`);
-    }
-  }
-
-  for (const w of warnReservedPolicyFields(policy)) {
-    console.warn(`WARN: ${w}`);
-  }
+  const runtime = loadPolicyRuntime(roots);
+  const { ajv, contractSchema } = runtime;
+  let ok = runtime.ok;
 
   const contractArg = args[0];
   if (contractArg) {

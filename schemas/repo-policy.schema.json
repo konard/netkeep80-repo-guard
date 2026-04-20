@@ -13,7 +13,8 @@
   ],
   "additionalProperties": false,
   "dependencies": {
-    "surface_matrix": ["surfaces", "change_classes"]
+    "surface_matrix": ["surfaces", "change_classes"],
+    "profile_overrides": ["profile"]
   },
   "properties": {
     "policy_format_version": {
@@ -23,6 +24,15 @@
     "repository_kind": {
       "type": "string",
       "enum": ["library", "application", "tooling", "documentation"]
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["requirements-strict"],
+      "description": "Optional built-in policy profile expanded before runtime checks. Explicit anchors or trace_rules in the policy override the generated profile sections."
+    },
+    "profile_overrides": {
+      "$ref": "#/definitions/profile_overrides",
+      "description": "Profile-specific refinements applied while expanding a built-in profile."
     },
     "enforcement": {
       "type": "object",
@@ -377,6 +387,48 @@
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
       "minItems": 1
+    },
+    "profile_overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requirement_json_globs": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Requirement JSON files that define canonical requirement ids and may contain requirement references."
+        },
+        "code_reference_globs": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Code, test, script, and example files scanned for @req-style requirement references."
+        },
+        "doc_reference_globs": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Markdown files scanned for plain requirement references."
+        },
+        "strict_heading_docs": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Markdown files whose headings must carry bracketed requirement references."
+        },
+        "evidence_surfaces": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Default evidence surfaces for changed requirements and affected anchors unless a more specific evidence override is supplied."
+        },
+        "changed_requirement_evidence_surfaces": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Evidence surfaces required when requirement JSON files change."
+        },
+        "affected_evidence_surfaces": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Evidence surfaces required for anchors.affects declarations."
+        },
+        "implementation_evidence_surfaces": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Evidence surfaces required for anchors.implements declarations."
+        },
+        "verification_evidence_surfaces": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Evidence surfaces required for anchors.verifies declarations."
+        }
+      }
     },
     "integration_workflow": {
       "type": "object",

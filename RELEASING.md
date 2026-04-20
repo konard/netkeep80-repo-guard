@@ -29,7 +29,7 @@ This document describes how to cut a new release of `repo-guard` so that downstr
    ```bash
    npm publish
    ```
-   The `files` field in `package.json` controls exactly what is included in the published artifact (`src/`, `schemas/`, `templates/`, `README.md`, `LICENSE`).
+   The `files` field in `package.json` controls exactly what is included in the published artifact (`src/`, `schemas/`, `templates/`, `docs/`, `README.md`, `LICENSE`).
 
 5. **Create a GitHub release** from the pushed tag. Use the tag name (e.g. `v1.0.1`) as the release title and list notable changes in the body.
 

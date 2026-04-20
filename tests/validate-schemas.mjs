@@ -41,6 +41,24 @@ expect("invalid-policy.json fails schema", validatePolicy(invalidPolicy), false)
 const repoPolicy = loadJSON(resolve(root, "repo-policy.json"));
 expect("repo-policy.json (self) passes schema", validatePolicy(repoPolicy), true);
 
+const policyWithProfile = {
+  ...validPolicy,
+  profile: "requirements-strict",
+  profile_overrides: {
+    strict_heading_docs: ["docs/architecture.md", "docs/pmm_requirements.md"],
+    evidence_surfaces: ["src/**", "tests/**", "docs/**", "requirements/README.md"],
+  },
+};
+expect("policy with requirements-strict profile passes schema", validatePolicy(policyWithProfile), true);
+
+const policyWithProfileOverridesOnly = {
+  ...validPolicy,
+  profile_overrides: {
+    evidence_surfaces: ["src/**"],
+  },
+};
+expect("policy with profile_overrides but no profile fails schema", validatePolicy(policyWithProfileOverridesOnly), false);
+
 const policyWithAnchors = {
   ...validPolicy,
   anchors: {

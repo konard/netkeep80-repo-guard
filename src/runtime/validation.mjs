@@ -11,6 +11,7 @@ import {
   compileSurfacePolicy,
   warnReservedPolicyFields,
 } from "../policy-compiler.mjs";
+import { resolvePolicyProfile } from "../policy-profiles.mjs";
 
 export function loadJSON(path) {
   return JSON.parse(readFileSync(path, "utf-8"));
@@ -48,14 +49,18 @@ export function validationCheck(ajv, schema, data, label) {
 export function loadPolicyRuntime(roots, options = {}) {
   const policySchema = loadJSON(resolve(roots.packageRoot, "schemas/repo-policy.schema.json"));
   const contractSchema = loadJSON(resolve(roots.packageRoot, "schemas/change-contract.schema.json"));
-  const policy = loadJSON(resolve(roots.repoRoot, "repo-policy.json"));
+  const rawPolicy = loadJSON(resolve(roots.repoRoot, "repo-policy.json"));
   const ajv = createAjv();
   const quiet = options.quiet || false;
 
   let ok = true;
-  ok = validate(ajv, policySchema, policy, "repo-policy.json", { quiet }) && ok;
+  ok = validate(ajv, policySchema, rawPolicy, "repo-policy.json", { quiet }) && ok;
+
+  const profileResult = resolvePolicyProfile(rawPolicy);
+  const policy = profileResult.policy;
 
   const compileGroups = [
+    ["profile compilation", profileResult.errors, (e) => e.message],
     ["forbid_regex compilation", compileForbidRegex(policy.content_rules), (e) => `[${e.rule_id}] invalid regex /${e.pattern}/: ${e.message}`],
     ["surface policy compilation", compileSurfacePolicy(policy), (e) => e.message],
     ["new file policy compilation", compileNewFilePolicy(policy), (e) => e.message],
