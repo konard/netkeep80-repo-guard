@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import Ajv from "ajv";
 import { compileAnchorPolicy, compileForbidRegex, compileIntegrationPolicy } from "./policy-compiler.mjs";
@@ -33,7 +33,7 @@ function checkRepoRoot(repoRoot) {
 function checkGit(repoRoot) {
   return check("git-available", () => {
     try {
-      const version = execSync("git --version", { encoding: "utf-8", stdio: "pipe" }).trim();
+      const version = execFileSync("git", ["--version"], { encoding: "utf-8", stdio: "pipe" }).trim();
       const isRepo = existsSync(resolve(repoRoot, ".git"));
       if (!isRepo) {
         return { name: "git-available", status: WARN, message: `${version} (not a git repository at ${repoRoot})`, hint: "Run 'git init' or check --repo-root points to a git repository" };
@@ -48,11 +48,11 @@ function checkGit(repoRoot) {
 function checkFetchDepth(repoRoot) {
   return check("fetch-depth", () => {
     try {
-      const isShallow = execSync("git rev-parse --is-shallow-repository", { encoding: "utf-8", cwd: repoRoot, stdio: "pipe" }).trim();
+      const isShallow = execFileSync("git", ["rev-parse", "--is-shallow-repository"], { encoding: "utf-8", cwd: repoRoot, stdio: "pipe" }).trim();
       if (isShallow === "true") {
         let count;
         try {
-          count = execSync("git rev-list --count HEAD", { encoding: "utf-8", cwd: repoRoot, stdio: "pipe" }).trim();
+          count = execFileSync("git", ["rev-list", "--count", "HEAD"], { encoding: "utf-8", cwd: repoRoot, stdio: "pipe" }).trim();
         } catch {
           count = "unknown";
         }
@@ -164,7 +164,7 @@ function checkAuth() {
     const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
     if (!ghToken) {
       try {
-        execSync("gh auth status", { encoding: "utf-8", stdio: "pipe" });
+        execFileSync("gh", ["auth", "status"], { encoding: "utf-8", stdio: "pipe" });
         return { name: "auth-token", status: PASS, message: "gh CLI authenticated (no explicit token)" };
       } catch {
         return { name: "auth-token", status: WARN, message: "No GH_TOKEN/GITHUB_TOKEN and gh CLI not authenticated", hint: "Set GH_TOKEN or GITHUB_TOKEN, or run 'gh auth login'. Auth is only required when check-pr falls back to linked-issue body for the change contract" };
@@ -177,7 +177,7 @@ function checkAuth() {
 function checkGhCli() {
   return check("gh-cli", () => {
     try {
-      const version = execSync("gh --version", { encoding: "utf-8", stdio: "pipe" }).trim().split("\n")[0];
+      const version = execFileSync("gh", ["--version"], { encoding: "utf-8", stdio: "pipe" }).trim().split("\n")[0];
       return { name: "gh-cli", status: PASS, message: version };
     } catch {
       return { name: "gh-cli", status: FAIL, message: "gh CLI not found", hint: "Install gh CLI — check-pr requires it for linked-issue fallback: https://cli.github.com/" };

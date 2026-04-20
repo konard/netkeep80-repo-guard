@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { realpathSync } from "node:fs";
-import { execSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getDiff, validateGitDiffRefs } from "./git.mjs";
 import {
   warnReservedContractFields,
 } from "./policy-compiler.mjs";
@@ -16,6 +16,7 @@ import { runPolicyPipeline } from "./runtime/pipeline.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
+const CHECK_DIFF_USAGE = "Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]";
 
 export function resolveRoots(args) {
   let repoRoot = process.cwd();
@@ -45,15 +46,6 @@ export function resolveRoots(args) {
   return { packageRoot, repoRoot, enforcementMode, args: filtered };
 }
 
-function getDiff(base, head, cwd) {
-  if (base && head) {
-    return execSync(`git diff ${base}...${head}`, { encoding: "utf-8", cwd });
-  }
-  const staged = execSync("git diff --cached", { encoding: "utf-8", cwd });
-  if (staged.trim()) return staged;
-  return execSync("git diff HEAD", { encoding: "utf-8", cwd });
-}
-
 function runCheckDiff(roots, args) {
   let base = null;
   let head = null;
@@ -73,21 +65,28 @@ function runCheckDiff(roots, args) {
       const next = args[i + 1];
       if (!next || next.startsWith("-")) {
         console.error("Error: --change-class requires a name argument");
-        console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+        console.error(CHECK_DIFF_USAGE);
         process.exit(1);
       }
       cliChangeClass = next;
       i++;
     } else if (args[i].startsWith("-") && !KNOWN_DIFF_OPTS.has(args[i])) {
       console.error(`Unknown option for check-diff: ${args[i]}`);
-      console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+      console.error(CHECK_DIFF_USAGE);
       process.exit(1);
     }
   }
 
   if (!["text", "json", "summary"].includes(format)) {
     console.error(`Unknown check-diff format: ${format}`);
-    console.error("Usage: repo-guard check-diff [--base <ref>] [--head <ref>] [--contract <path>] [--change-class <name>] [--format <text|json|summary>] [--enforcement <advisory|blocking>]");
+    console.error(CHECK_DIFF_USAGE);
+    process.exit(1);
+  }
+
+  const refCheck = validateGitDiffRefs(base, head);
+  if (!refCheck.ok) {
+    console.error(`Error: ${refCheck.message}`);
+    console.error(CHECK_DIFF_USAGE);
     process.exit(1);
   }
 
@@ -133,7 +132,13 @@ function runCheckDiff(roots, args) {
     }
   }
 
-  const diffText = getDiff(base, head, roots.repoRoot);
+  let diffText;
+  try {
+    diffText = getDiff(base, head, roots.repoRoot);
+  } catch (e) {
+    console.error(`Error: ${e.message}`);
+    process.exit(1);
+  }
   const declaredChangeClass = cliChangeClass || contract?.change_class || null;
 
   const summary = runPolicyPipeline({

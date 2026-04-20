@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   parseDiff,
   filterOperationalPaths,
@@ -9,7 +9,7 @@ import { extractAnchors } from "../extractors/anchors.mjs";
 import { extractIntegration } from "../extractors/integration.mjs";
 
 export function listTrackedFiles(repoRoot) {
-  return execSync("git ls-files", { encoding: "utf-8", cwd: repoRoot })
+  return execFileSync("git", ["ls-files"], { encoding: "utf-8", cwd: repoRoot })
     .split(/\r?\n/)
     .filter(Boolean);
 }

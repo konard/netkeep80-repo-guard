@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { getDiff, validateGitDiffRefs } from "./git.mjs";
 import { extractContract, extractLinkedIssueNumbers, resolveContract } from "./markdown-contract.mjs";
 import { warnReservedContractFields } from "./policy-compiler.mjs";
 import { resolveEnforcementMode } from "./enforcement.mjs";
 import { loadPolicyRuntime, validationCheck } from "./runtime/validation.mjs";
 import { runPolicyPipeline } from "./runtime/pipeline.mjs";
+
+const GITHUB_REPO_FULL_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const ISSUE_NUMBER = /^[1-9][0-9]*$/;
 
 export function loadGitHubEvent() {
   const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -35,9 +39,15 @@ export function loadGitHubEvent() {
 }
 
 export function fetchIssueBody(repoFullName, issueNumber) {
+  const issueNumberText = String(issueNumber);
+  if (!GITHUB_REPO_FULL_NAME.test(repoFullName) || !ISSUE_NUMBER.test(issueNumberText)) {
+    return null;
+  }
+
   try {
-    const result = execSync(
-      `gh api repos/${repoFullName}/issues/${issueNumber} --jq .body`,
+    const result = execFileSync(
+      "gh",
+      ["api", `repos/${repoFullName}/issues/${issueNumberText}`, "--jq", ".body"],
       { encoding: "utf-8", timeout: 30000 }
     );
     return result.trim() || null;
@@ -52,12 +62,12 @@ export function checkPrerequisites() {
     missing.push("GITHUB_EVENT_PATH env var (set automatically by GitHub Actions)");
   }
   try {
-    execSync("git --version", { encoding: "utf-8", stdio: "pipe" });
+    execFileSync("git", ["--version"], { encoding: "utf-8", stdio: "pipe" });
   } catch {
     missing.push("git CLI (required for diff analysis)");
   }
   try {
-    execSync("gh --version", { encoding: "utf-8", stdio: "pipe" });
+    execFileSync("gh", ["--version"], { encoding: "utf-8", stdio: "pipe" });
   } catch {
     missing.push("gh CLI (required for linked issue fallback)");
   }
@@ -141,6 +151,15 @@ export function runCheckPR(roots, args = []) {
   }
 
   const { base, head, prBody, prNumber, repoFullName } = eventInfo;
+  const refCheck = validateGitDiffRefs(base, head, {
+    baseLabel: "pull_request.base.sha",
+    headLabel: "pull_request.head.sha",
+    requireBoth: true,
+  });
+  if (!refCheck.ok) {
+    console.error(`ERROR: ${refCheck.message}`);
+    process.exit(1);
+  }
   console.log(`PR #${prNumber}: checking contract and diff (${base?.slice(0, 7)}..${head?.slice(0, 7)})`);
 
   const runtime = loadPolicyRuntime(roots);
@@ -205,7 +224,13 @@ export function runCheckPR(roots, args = []) {
     }
   }
 
-  const diffText = execSync(`git diff ${base}...${head}`, { encoding: "utf-8", cwd: roots.repoRoot });
+  let diffText;
+  try {
+    diffText = getDiff(base, head, roots.repoRoot);
+  } catch (e) {
+    console.error(`ERROR: ${e.message}`);
+    process.exit(1);
+  }
   const summary = runPolicyPipeline({
     mode: "check-pr",
     repositoryRoot: roots.repoRoot,

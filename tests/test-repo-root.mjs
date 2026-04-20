@@ -1,12 +1,13 @@
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveRoots } from "../src/repo-guard.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..");
+const repoGuard = resolve(projectRoot, "src/repo-guard.mjs");
 
 let failures = 0;
 
@@ -17,6 +18,14 @@ function expect(label, actual, expected) {
     failures++;
     console.error(`  expected: ${JSON.stringify(expected)}, got: ${JSON.stringify(actual)}`);
   }
+}
+
+function runRepoGuard(args, opts = {}) {
+  return spawnSync(process.execPath, [repoGuard, ...args], {
+    cwd: opts.cwd || projectRoot,
+    env: opts.env || process.env,
+    encoding: "utf-8",
+  });
 }
 
 // --- resolveRoots: default uses process.cwd() ---
@@ -558,6 +567,99 @@ function expect(label, actual, expected) {
   } catch (e) {
     expect("known check-diff options still accepted", false, true);
   }
+
+  rmSync(tmp, { recursive: true });
+}
+
+// --- check-diff rejects shell-looking refs without executing them ---
+
+{
+  const tmp = mkdtempSync(join(tmpdir(), "rg-ref-injection-diff-"));
+  execSync("git init", { cwd: tmp });
+  execSync("git config user.email test@test.com && git config user.name Test", { cwd: tmp });
+
+  const policy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: {
+      forbidden: [],
+      canonical_docs: ["README.md"],
+      governance_paths: ["repo-policy.json"],
+    },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(policy));
+  writeFileSync(join(tmp, "a.txt"), "a\nb\n");
+  execSync("git add -A && git commit -m init", { cwd: tmp });
+
+  writeFileSync(join(tmp, "a.txt"), "a\n");
+  execSync("git add -A && git commit -m second", { cwd: tmp });
+
+  const marker = join(tmp, "check-diff-injected");
+  const result = runRepoGuard([
+    "check-diff",
+    "--repo-root",
+    tmp,
+    "--base",
+    `HEAD~1; touch ${marker}; #`,
+    "--head",
+    "HEAD",
+  ]);
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  expect("check-diff rejects shell-looking base ref", result.status, 1);
+  expect("check-diff reports invalid git ref", output.includes("Invalid git ref"), true);
+  expect("check-diff does not execute injected command", existsSync(marker), false);
+
+  rmSync(tmp, { recursive: true });
+}
+
+// --- check-pr rejects shell-looking event refs without executing them ---
+
+{
+  const tmp = mkdtempSync(join(tmpdir(), "rg-ref-injection-pr-"));
+  execSync("git init", { cwd: tmp });
+  execSync("git config user.email test@test.com && git config user.name Test", { cwd: tmp });
+
+  const policy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: {
+      forbidden: [],
+      canonical_docs: ["README.md"],
+      governance_paths: ["repo-policy.json"],
+    },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(policy));
+  writeFileSync(join(tmp, "a.txt"), "a\nb\n");
+  execSync("git add -A && git commit -m init", { cwd: tmp });
+
+  writeFileSync(join(tmp, "a.txt"), "a\n");
+  execSync("git add -A && git commit -m second", { cwd: tmp });
+
+  const marker = join(tmp, "check-pr-injected");
+  const eventFile = join(tmp, "event.json");
+  writeFileSync(eventFile, JSON.stringify({
+    pull_request: {
+      number: 42,
+      base: { sha: `HEAD~1; touch ${marker}; #` },
+      head: { sha: "HEAD" },
+      body: "```repo-guard-json\n{\"change_type\":\"bugfix\",\"scope\":[\"a.txt\"],\"budgets\":{\"max_new_files\":0,\"max_net_added_lines\":500},\"must_touch\":[\"a.txt\"],\"must_not_touch\":[],\"expected_effects\":[\"test\"]}\n```",
+    },
+    repository: { full_name: "owner/repo" },
+  }));
+
+  const result = runRepoGuard(["--repo-root", tmp, "check-pr"], {
+    env: { ...process.env, GITHUB_EVENT_PATH: eventFile },
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  expect("check-pr rejects shell-looking base ref", result.status, 1);
+  expect("check-pr reports invalid git ref", output.includes("Invalid git ref"), true);
+  expect("check-pr does not execute injected command", existsSync(marker), false);
 
   rmSync(tmp, { recursive: true });
 }
