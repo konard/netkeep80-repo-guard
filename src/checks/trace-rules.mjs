@@ -1,4 +1,5 @@
-import { matchesAny } from "../diff-checker.mjs";
+import { uniqueSorted } from "../utils/collections.mjs";
+import { matchesAny } from "../utils/path-patterns.mjs";
 
 const CONTRACT_ANCHOR_FIELDS = new Map([
   ["anchors.affects", ["anchors", "affects"]],
@@ -10,10 +11,6 @@ function formatAnchorLocation(instance) {
   const line = instance.line ? `:${instance.line}` : "";
   const column = instance.column ? `:${instance.column}` : "";
   return `${instance.file}${line}${column}`;
-}
-
-function uniqueSorted(values) {
-  return [...new Set(values)].sort();
 }
 
 function cloneAnchorInstance(instance) {

@@ -14,7 +14,7 @@ import {
   warnReservedContractFields,
   warnReservedPolicyFields,
 } from "../src/policy-compiler.mjs";
-import { checkMustTouch } from "../src/diff-checker.mjs";
+import { checkMustTouch } from "../src/checks/rules/contract-rules.mjs";
 import { checkIssueFallbackPrerequisites, checkPrerequisites } from "../src/github-pr.mjs";
 
 // Build test patterns without triggering the no-todo-without-issue content rule

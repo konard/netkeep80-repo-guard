@@ -1,25 +1,22 @@
+import { classifyNewFiles, detectTouchedSurfaces } from "../src/diff/classification.mjs";
+import { filterOperationalPaths } from "../src/diff/filters.mjs";
+import { parseDiff } from "../src/diff/parser.mjs";
 import {
-  parseDiff,
-  filterOperationalPaths,
-  checkForbiddenPaths,
   checkCanonicalDocsBudget,
-  checkNewFilesBudget,
   checkNetAddedLinesBudget,
+  checkNewFilesBudget,
   checkSurfaceDebt,
-  checkCochangeRules,
-  checkContentRules,
-  checkMustTouch,
-  checkMustNotTouch,
-  detectTouchedSurfaces,
-  checkSurfaceMatrix,
-  classifyNewFiles,
-  checkNewFileRules,
-  checkChangeTypeRules,
-  checkRegistryRules,
-  checkAdvisoryTextRules,
-  checkSizeRules,
-  countTextLines,
-} from "../src/diff-checker.mjs";
+} from "../src/checks/rules/budgets.mjs";
+import { checkChangeTypeRules } from "../src/checks/rules/change-type-rules.mjs";
+import { checkCochangeRules } from "../src/checks/rules/cochange-rules.mjs";
+import { checkContentRules } from "../src/checks/rules/content-rules.mjs";
+import { checkMustNotTouch, checkMustTouch } from "../src/checks/rules/contract-rules.mjs";
+import { checkAdvisoryTextRules } from "../src/checks/rules/advisory-text-rules.mjs";
+import { checkForbiddenPaths } from "../src/checks/rules/paths.mjs";
+import { checkNewFileRules } from "../src/checks/rules/new-file-rules.mjs";
+import { checkRegistryRules } from "../src/checks/rules/registry-rules.mjs";
+import { checkSizeRules, countTextLines } from "../src/checks/rules/size-rules.mjs";
+import { checkSurfaceMatrix } from "../src/checks/rules/surface-matrix.mjs";
 
 let failures = 0;
 

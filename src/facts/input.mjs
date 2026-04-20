@@ -1,10 +1,7 @@
 import { execFileSync } from "node:child_process";
-import {
-  parseDiff,
-  filterOperationalPaths,
-  detectTouchedSurfaces,
-  classifyNewFiles,
-} from "../diff-checker.mjs";
+import { classifyNewFiles, detectTouchedSurfaces } from "../diff/classification.mjs";
+import { filterOperationalPaths } from "../diff/filters.mjs";
+import { parseDiff } from "../diff/parser.mjs";
 import { extractAnchors } from "../extractors/anchors.mjs";
 import { extractIntegration } from "../extractors/integration.mjs";
 

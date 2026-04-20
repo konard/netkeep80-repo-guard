@@ -1,24 +1,9 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { parseDocument } from "yaml";
+import { uniqueSorted } from "../utils/collections.mjs";
+import { readRepositoryTextFile } from "../utils/repository-files.mjs";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function uniqueSorted(values) {
-  return [...new Set(values)].sort();
-}
-
-function readRepositoryFile(filePath, options) {
-  if (options.readFile) {
-    const content = options.readFile(filePath);
-    if (content === undefined || content === null) {
-      throw new Error(`cannot read ${filePath}`);
-    }
-    return String(content);
-  }
-  return readFileSync(resolve(options.repoRoot || process.cwd(), filePath), "utf-8");
 }
 
 function collapseMessage(message) {
@@ -628,7 +613,7 @@ export function extractIntegration(policy, options = {}) {
   const contentCache = new Map();
   function contentFor(file) {
     if (!contentCache.has(file)) {
-      contentCache.set(file, readRepositoryFile(file, options));
+      contentCache.set(file, readRepositoryTextFile(file, options));
     }
     return contentCache.get(file);
   }

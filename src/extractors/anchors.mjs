@@ -1,25 +1,6 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { minimatch } from "minimatch";
-
-function matchesAny(filePath, patterns) {
-  return patterns.some((pattern) => minimatch(filePath, pattern, { dot: true }));
-}
-
-function uniqueSorted(values) {
-  return [...new Set(values)].sort();
-}
-
-function readRepositoryFile(filePath, options) {
-  if (options.readFile) {
-    const content = options.readFile(filePath);
-    if (content === undefined || content === null) {
-      throw new Error(`cannot read ${filePath}`);
-    }
-    return String(content);
-  }
-  return readFileSync(resolve(options.repoRoot || process.cwd(), filePath), "utf-8");
-}
+import { uniqueSorted } from "../utils/collections.mjs";
+import { matchesAny } from "../utils/path-patterns.mjs";
+import { readRepositoryTextFile } from "../utils/repository-files.mjs";
 
 function candidateAnchorFiles(options) {
   const changedPaths = (options.changedFiles || [])
@@ -160,7 +141,7 @@ export function extractAnchors(policy, options = {}) {
 
   function contentFor(file) {
     if (!contentCache.has(file)) {
-      contentCache.set(file, readRepositoryFile(file, options));
+      contentCache.set(file, readRepositoryTextFile(file, options));
     }
     return contentCache.get(file);
   }

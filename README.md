@@ -769,7 +769,9 @@ node src/repo-guard.mjs check-diff --format summary
 | Путь | Назначение |
 | --- | --- |
 | `src/repo-guard.mjs` | Точка входа CLI |
-| `src/diff-checker.mjs` | Разбор diff и низкоуровневые проверки |
+| `src/diff/` | Разбор diff и вычисление classification facts |
+| `src/checks/rule-registry.mjs` | Единый контракт регистрации и исполнения rule families |
+| `src/checks/rules/` | Отдельные rule families для diff, surface, registry и content checks |
 | `src/github-pr.mjs` | Адаптер GitHub PR |
 | `src/markdown-contract.mjs` | Извлечение контракта из Markdown |
 | `src/runtime/` | Валидация и общий конвейер политики |

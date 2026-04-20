@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "validate": "node src/repo-guard.mjs",
-    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-anchor-extractors.mjs && node tests/test-integration-extractors.mjs && node tests/test-integration-diagnostics.mjs && node tests/test-integration-fixtures.mjs && node tests/test-trace-evidence-rules.mjs && node tests/test-policy-profiles.mjs && node tests/test-repo-root.mjs && node tests/test-init.mjs && node tests/test-release-ref.mjs && node tests/test-doctor.mjs && node tests/test-enforcement-mode.mjs && node tests/test-structured-output.mjs && node tests/test-pipeline.mjs && node tests/test-self-hosting.mjs",
+    "test": "node tests/validate-schemas.mjs && node tests/test-diff-rules.mjs && node tests/test-rule-registry.mjs && node tests/test-markdown-contract.mjs && node tests/test-github-pr.mjs && node tests/test-hardening.mjs && node tests/test-anchor-extractors.mjs && node tests/test-integration-extractors.mjs && node tests/test-integration-diagnostics.mjs && node tests/test-integration-fixtures.mjs && node tests/test-trace-evidence-rules.mjs && node tests/test-policy-profiles.mjs && node tests/test-repo-root.mjs && node tests/test-init.mjs && node tests/test-release-ref.mjs && node tests/test-doctor.mjs && node tests/test-enforcement-mode.mjs && node tests/test-structured-output.mjs && node tests/test-pipeline.mjs && node tests/test-self-hosting.mjs",
     "test:hardening": "node tests/test-hardening.mjs",
     "test:anchors": "node tests/test-anchor-extractors.mjs",
     "test:integration": "node tests/test-integration-extractors.mjs",
@@ -29,6 +29,7 @@
     "test:repo-root": "node tests/test-repo-root.mjs",
     "test:schemas": "node tests/validate-schemas.mjs",
     "test:diff": "node tests/test-diff-rules.mjs",
+    "test:registry": "node tests/test-rule-registry.mjs",
     "test:contract": "node tests/test-markdown-contract.mjs",
     "test:github-pr": "node tests/test-github-pr.mjs",
     "test:init": "node tests/test-init.mjs",
