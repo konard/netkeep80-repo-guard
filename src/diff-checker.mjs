@@ -274,14 +274,14 @@ function readSizeRuleFile(path, options = {}) {
   return readFileSync(fullPath);
 }
 
-function countTextLines(content) {
+export function countTextLines(content) {
   if (content.length === 0) return 0;
   const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const withoutTrailingNewline = normalized.endsWith("\n")
-    ? normalized.slice(0, -1)
-    : normalized;
-  if (withoutTrailingNewline.length === 0) return 0;
-  return withoutTrailingNewline.split("\n").length;
+  let lines = 1;
+  for (const char of normalized) {
+    if (char === "\n") lines++;
+  }
+  return normalized.endsWith("\n") ? lines - 1 : lines;
 }
 
 function measureSizeRuleFile(path, metric, options = {}) {

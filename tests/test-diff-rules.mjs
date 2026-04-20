@@ -18,6 +18,7 @@ import {
   checkRegistryRules,
   checkAdvisoryTextRules,
   checkSizeRules,
+  countTextLines,
 } from "../src/diff-checker.mjs";
 
 let failures = 0;
@@ -801,6 +802,11 @@ const cappedAdvisoryResult = checkAdvisoryTextRules(
 expect("14. advisory caps reported matches", cappedAdvisoryResult.matches.length, 1);
 
 // --- 15. size rules ---
+
+expect("15. line count empty content", countTextLines(""), 0);
+expect("15. line count single blank line", countTextLines("\n"), 1);
+expect("15. line count trailing newline", countTextLines("a\n"), 1);
+expect("15. line count two blank lines", countTextLines("\n\n"), 2);
 
 const sizeRuleFiles = new Map([
   ["src/small.mjs", "one\ntwo\n"],
