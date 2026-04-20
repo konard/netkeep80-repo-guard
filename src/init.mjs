@@ -1,6 +1,8 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, relative, dirname } from "node:path";
 import { normalizeEnforcementMode } from "./enforcement.mjs";
+
+const ACTION_USES_TARGET = "netkeep80/repo-guard";
 
 const PRESETS = {
   application: {
@@ -62,7 +64,16 @@ function buildPolicy(preset, enforcementMode) {
   };
 }
 
-function buildWorkflow(enforcementMode) {
+function defaultActionRef(packageRoot) {
+  const packagePath = resolve(packageRoot, "package.json");
+  const packageJson = JSON.parse(readFileSync(packagePath, "utf-8"));
+  if (!packageJson.version) {
+    throw new Error(`Cannot determine repo-guard package version from ${packagePath}`);
+  }
+  return `v${packageJson.version}`;
+}
+
+function buildWorkflow(enforcementMode, actionRef) {
   return `name: repo-guard policy check
 
 on:
@@ -79,7 +90,7 @@ jobs:
           fetch-depth: 0
 
       - name: Enforce repository policy
-        uses: netkeep80/repo-guard@main
+        uses: ${ACTION_USES_TARGET}@${actionRef}
         with:
           mode: check-pr
           enforcement: ${enforcementMode}
@@ -217,7 +228,8 @@ export function runInit(roots, args) {
   writeIfAbsent(policyPath, policyContent, created, skipped);
 
   const workflowPath = resolve(repoRoot, ".github/workflows/repo-guard.yml");
-  writeIfAbsent(workflowPath, buildWorkflow(enforcementMode), created, skipped);
+  const actionRef = defaultActionRef(roots.packageRoot);
+  writeIfAbsent(workflowPath, buildWorkflow(enforcementMode, actionRef), created, skipped);
 
   const prTemplatePath = resolve(repoRoot, ".github/PULL_REQUEST_TEMPLATE.md");
   writeIfAbsent(prTemplatePath, buildPRTemplate(), created, skipped);
