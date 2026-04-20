@@ -36,20 +36,32 @@
         "id": "pull-request-template",
         "kind": "markdown",
         "path": ".github/PULL_REQUEST_TEMPLATE.md",
-        "requires_contract_block": true
+        "requires_contract_block": true,
+        "required_block_kind": "repo-guard-yaml",
+        "required_contract_fields": ["change_type", "scope", "anchors.affects"]
       },
       {
         "id": "change-contract-issue-form",
         "kind": "github_issue_form",
         "path": ".github/ISSUE_TEMPLATE/change-contract.yml",
-        "requires_contract_block": true
+        "requires_contract_block": true,
+        "optional": true,
+        "required_block_kind": "repo-guard-yaml",
+        "required_contract_fields": ["change_type", "scope", "anchors.affects"]
       }
     ],
     "docs": [
       {
         "id": "readme",
         "path": "README.md",
-        "must_mention": ["repo-guard", "contract", "integration"]
+        "must_mention": ["repo-guard", "contract", "integration"],
+        "must_reference_files": [
+          "repo-policy.json",
+          ".github/PULL_REQUEST_TEMPLATE.md",
+          ".github/ISSUE_TEMPLATE/change-contract.yml"
+        ],
+        "must_mention_profiles": ["self-hosting"],
+        "must_mention_contract_fields": ["change_type", "scope", "anchors.affects"]
       }
     ],
     "profiles": [

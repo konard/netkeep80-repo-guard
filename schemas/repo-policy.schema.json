@@ -463,6 +463,19 @@
           "type": "boolean",
           "description": "Whether the template is expected to include a repo-guard contract block."
         },
+        "optional": {
+          "type": "boolean",
+          "description": "When true, a missing declared template is allowed; if the file exists, its configured template rules still apply."
+        },
+        "required_block_kind": {
+          "type": "string",
+          "enum": ["repo-guard-yaml", "repo-guard-json"],
+          "description": "Specific repo-guard fenced block kind required in the template."
+        },
+        "required_contract_fields": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Contract field paths that must be present in at least one extracted contract example."
+        },
         "profiles": { "$ref": "#/definitions/non_empty_string_array" }
       }
     },
@@ -478,6 +491,18 @@
         },
         "path": { "$ref": "#/definitions/non_empty_string" },
         "must_mention": { "$ref": "#/definitions/non_empty_string_array" },
+        "must_reference_files": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Repository file paths that must be mentioned in this documentation file."
+        },
+        "must_mention_profiles": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Integration profile ids that must be mentioned in this documentation file."
+        },
+        "must_mention_contract_fields": {
+          "$ref": "#/definitions/non_empty_string_array",
+          "description": "Contract field paths that must be mentioned in this documentation file."
+        },
         "profiles": { "$ref": "#/definitions/non_empty_string_array" }
       }
     },

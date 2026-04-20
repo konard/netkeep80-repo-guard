@@ -122,6 +122,9 @@ const policyWithIntegration = {
         kind: "markdown",
         path: ".github/PULL_REQUEST_TEMPLATE.md",
         requires_contract_block: true,
+        optional: true,
+        required_block_kind: "repo-guard-yaml",
+        required_contract_fields: ["change_type", "scope", "anchors.affects"],
         profiles: ["requirements-strict"],
       },
     ],
@@ -131,6 +134,9 @@ const policyWithIntegration = {
         kind: "markdown",
         path: "README.md",
         must_mention: ["repo-guard", "anchors.affects"],
+        must_reference_files: ["repo-policy.json", ".github/PULL_REQUEST_TEMPLATE.md"],
+        must_mention_profiles: ["requirements-strict"],
+        must_mention_contract_fields: ["anchors.affects"],
         profiles: ["requirements-strict"],
       },
     ],
@@ -167,6 +173,35 @@ const invalidIntegrationExpectationPolicy = {
   },
 };
 expect("policy with malformed integration workflow expectations fails schema", validatePolicy(invalidIntegrationExpectationPolicy), false);
+
+const invalidTemplateDocRulePolicy = {
+  ...validPolicy,
+  integration: {
+    templates: [
+      {
+        id: "pull-request-template",
+        kind: "markdown",
+        path: ".github/PULL_REQUEST_TEMPLATE.md",
+        requires_contract_block: true,
+        optional: "yes",
+        required_block_kind: "repo-guard-xml",
+        required_contract_fields: [],
+      },
+    ],
+    docs: [
+      {
+        id: "readme",
+        kind: "markdown",
+        path: "README.md",
+        must_mention: ["repo-guard"],
+        must_reference_files: [],
+        must_mention_profiles: [],
+        must_mention_contract_fields: [],
+      },
+    ],
+  },
+};
+expect("policy with malformed template and doc integration rules fails schema", validatePolicy(invalidTemplateDocRulePolicy), false);
 
 const invalidIntegrationPolicy = {
   ...validPolicy,
