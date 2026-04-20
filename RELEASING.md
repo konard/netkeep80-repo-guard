@@ -62,7 +62,7 @@ GitHub release is published.
    ```bash
    npm publish
    ```
-   The `files` field in `package.json` controls exactly what is included in the published artifact (`src/`, `schemas/`, `templates/`, `scripts/`, `docs/`, `README.md`, `LICENSE`).
+   The `files` field in `package.json` controls exactly what is included in the published artifact (`src/`, `schemas/`, `templates/`, `docs/`, `examples/`, `README.md`, `LICENSE`).
 
 ## Verifying the published package
 
