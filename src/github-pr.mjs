@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { getDiff } from "./git.mjs";
-import { extractContract, extractLinkedIssueNumbers, resolveContract } from "./markdown-contract.mjs";
+import { getDiff, readBaseGovernancePaths } from "./git.mjs";
+import {
+  extractContract,
+  extractIssueAuthorization,
+  extractLinkedIssueNumbers,
+  resolveContract,
+} from "./markdown-contract.mjs";
 import { warnReservedContractFields } from "./policy-compiler.mjs";
 import { resolveEnforcementMode } from "./enforcement.mjs";
 import { loadPolicyRuntime, validationCheck } from "./runtime/validation.mjs";
@@ -80,13 +85,17 @@ export function checkIssueFallbackPrerequisites() {
 }
 
 export function resolvePRContractFacts({ prBody, issueBody = null, linkedIssueCount = null }) {
+  const linkedIssues = extractLinkedIssueNumbers(prBody);
+  const issueAuthorization = extractIssueAuthorization(issueBody);
+
   const prResult = extractContract(prBody);
   if (prResult.ok) {
     return {
       ok: true,
       contract: prResult.contract,
       contractSource: "pr body",
-      linkedIssues: extractLinkedIssueNumbers(prBody),
+      linkedIssues,
+      issueAuthorization,
     };
   }
 
@@ -96,11 +105,11 @@ export function resolvePRContractFacts({ prBody, issueBody = null, linkedIssueCo
       error: prResult.error,
       message: prResult.message,
       contractSource: "pr body",
-      linkedIssues: extractLinkedIssueNumbers(prBody),
+      linkedIssues,
+      issueAuthorization,
     };
   }
 
-  const linkedIssues = extractLinkedIssueNumbers(prBody);
   const resolvedLinkedIssueCount = linkedIssueCount ?? linkedIssues.length;
   if (resolvedLinkedIssueCount > 1) {
     return {
@@ -109,6 +118,7 @@ export function resolvePRContractFacts({ prBody, issueBody = null, linkedIssueCo
       message: `PR body references ${resolvedLinkedIssueCount} issues (${linkedIssues.map(n => `#${n}`).join(", ")}); expected exactly one`,
       contractSource: "none",
       linkedIssues,
+      issueAuthorization,
     };
   }
 
@@ -119,6 +129,7 @@ export function resolvePRContractFacts({ prBody, issueBody = null, linkedIssueCo
       contract: issueResult.contract,
       contractSource: "linked issue",
       linkedIssues,
+      issueAuthorization,
     };
   }
 
@@ -128,6 +139,7 @@ export function resolvePRContractFacts({ prBody, issueBody = null, linkedIssueCo
     message: issueResult.message,
     contractSource: "none",
     linkedIssues,
+    issueAuthorization,
   };
 }
 
@@ -177,20 +189,36 @@ export function runCheckPR(roots, args = []) {
   }
 
   let issueBody = null;
+  const linkedIssues = extractLinkedIssueNumbers(prBody);
   const prResult = extractContract(prBody);
-  if (!prResult.ok && prResult.error === "contract_not_found") {
-    const linkedIssues = extractLinkedIssueNumbers(prBody);
-    if (linkedIssues.length > 1) {
-      // Handled by resolvePRContractFacts after preserving linked issue diagnostics.
-    } else if (linkedIssues.length === 1) {
+  const prBodyHasContract = prResult.ok;
+  const needsIssueFallback =
+    !prResult.ok && prResult.error === "contract_not_found" && linkedIssues.length === 1;
+  if (linkedIssues.length === 1 && (needsIssueFallback || prBodyHasContract)) {
+    if (needsIssueFallback) {
       console.log(`No contract in PR body; trying linked issue #${linkedIssues[0]}...`);
-      const fallbackPrereqs = checkIssueFallbackPrerequisites();
-      if (fallbackPrereqs.length > 0) {
+    } else {
+      console.log(`Fetching linked issue #${linkedIssues[0]} for privileged authorization...`);
+    }
+    const fallbackPrereqs = checkIssueFallbackPrerequisites();
+    if (fallbackPrereqs.length > 0) {
+      if (needsIssueFallback) {
         console.error("ERROR: linked issue fallback prerequisites not met:");
         for (const p of fallbackPrereqs) console.error(`  - ${p}`);
         process.exit(1);
+      } else {
+        console.warn(
+          "WARN: linked issue lookup prerequisites not met; privileged authorization from the issue body will be unavailable"
+        );
+        for (const p of fallbackPrereqs) console.warn(`  - ${p}`);
       }
+    } else {
       issueBody = fetchIssueBody(repoFullName, linkedIssues[0]);
+      if (issueBody === null && prBodyHasContract) {
+        console.warn(
+          `WARN: could not fetch linked issue #${linkedIssues[0]} body; privileged authorization from the issue body will be unavailable`
+        );
+      }
     }
   }
 
@@ -209,6 +237,7 @@ export function runCheckPR(roots, args = []) {
   }
   let contract = null;
   let contractSource = contractResult.contractSource || "none";
+  const issueAuthorization = contractResult.issueAuthorization || null;
   const initialChecks = [];
   if (!contractResult.ok) {
     initialChecks.push({
@@ -237,12 +266,32 @@ export function runCheckPR(roots, args = []) {
     console.error(`ERROR: ${e.message}`);
     process.exit(1);
   }
+
+  const basePolicyRead = readBaseGovernancePaths(base, roots.repoRoot);
+  let trustedGovernancePaths;
+  if (basePolicyRead.error) {
+    initialChecks.push({
+      name: "governance-trusted-boundary",
+      check: {
+        ok: false,
+        message: `cannot establish trusted governance boundary: ${basePolicyRead.error}`,
+        hint: "check-pr requires reading repo-policy.json at the PR base via `git show <base>:repo-policy.json` so a PR cannot narrow the governance perimeter in the same diff. The boundary is intentionally not falling back to the PR head policy. Ensure the base ref is fetched and repo-policy.json is valid JSON on the base branch.",
+        details: [`base_ref: ${base}`, `base_policy_read_error: ${basePolicyRead.error}`],
+      },
+    });
+    trustedGovernancePaths = [];
+  } else {
+    trustedGovernancePaths = basePolicyRead.governancePaths ?? [];
+  }
+
   const summary = runPolicyPipeline({
     mode: "check-pr",
     repositoryRoot: roots.repoRoot,
     policy,
     contract,
     contractSource,
+    issueAuthorization,
+    trustedGovernancePaths,
     enforcement,
     diffText,
     initialChecks,

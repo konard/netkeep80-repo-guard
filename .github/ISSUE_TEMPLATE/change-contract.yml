@@ -31,6 +31,10 @@ body:
             - FR-014
           verifies:
             - FR-014
+        # Uncomment and list governance files this issue sanctions changing.
+        # Only the contract in THIS issue body can unlock policy.paths.governance_paths.
+        # authorized_governance_paths:
+        #   - repo-policy.json
         must_touch: []
         must_not_touch: []
         expected_effects:

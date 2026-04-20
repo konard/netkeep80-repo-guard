@@ -289,7 +289,7 @@ jobs:
 
 | Поле | Поведение сейчас |
 | --- | --- |
-| `paths.governance_paths` | Документирует управляющие файлы, но не применяется как правило |
+| `paths.governance_paths` | Блокирует правки перечисленных файлов управления, пока в теле связанного issue не появится блок `repo-guard-yaml` с `authorized_governance_paths`. Граница читается из `repo-policy.json` базовой ветки, а поле `authorized_governance_paths` в PR-body-контракте игнорируется (см. раздел «Санкционирование изменений политики») |
 | `paths.public_api` | Зарезервировано; непустое значение дает предупреждение |
 | `contract.overrides` | Зарезервировано; непустое значение дает предупреждение |
 
@@ -735,6 +735,55 @@ repo-guard doctor --integration --format summary
 `.github/ISSUE_TEMPLATE/`, `templates/` и `action.yml`. Они не являются
 служебными исключениями и должны проходить обычную проверку политики PR.
 
+### Санкционирование изменений политики
+
+Семейство правил `governance-paths` разводит намерение (change intent) и
+привилегированную авторизацию по двум независимым каналам:
+
+- **тело PR** описывает *намерение* изменения (`change_type`, `scope`,
+  `budgets`, `must_touch`, `must_not_touch`, `expected_effects`, `anchors.*`);
+  его пишет автор PR, и ИИ-агент в том числе;
+- **тело связанного issue** несёт *привилегированную авторизацию* на правку
+  governance-файлов в поле `authorized_governance_paths`; только этот канал
+  доверенный, потому что редактирование issue обычно требует прав, которых у
+  ИИ-агента нет.
+
+Правило сравнивает список тронутых файлов с `paths.governance_paths`, причём
+этот список читается из `repo-policy.json` **базовой ветки** (trusted base
+policy), а не из версии в текущем PR. Это закрывает обходной путь, при котором
+PR сначала сужает `governance_paths`, а потом правит файл, уже выпавший из
+нового периметра, — граница фиксируется до того, как PR успеет её подправить.
+
+`authorized_governance_paths`, указанный в контракте тела PR, намеренно
+игнорируется как источник авторизации (диагностика отметит его как
+`untrusted_authorization_ignored`). Чтобы правка governance-файла прошла, в
+теле issue нужен блок `repo-guard-yaml` с тем же (или покрывающим)
+`authorized_governance_paths`, например:
+
+```repo-guard-yaml
+change_type: feature
+scope:
+  - repo-policy.json
+budgets: {}
+authorized_governance_paths:
+  - repo-policy.json
+must_touch: []
+must_not_touch: []
+expected_effects:
+  - Relax max-source-file-lines limit to 1200
+```
+
+Обычный change contract для PR можно по-прежнему держать в теле PR; issue
+нужен только ради privileged authorization, и именно оттуда runtime его
+извлекает.
+
+Если `repo-policy.json` базовой ветки не удаётся прочитать или распарсить
+(`git show <base>:repo-policy.json` падает, JSON невалиден и т. п.),
+`check-pr` **намеренно завершается ошибкой** (`governance-trusted-boundary`)
+вместо отката на head policy текущего PR. Без доверенной границы
+governance-решение не принимается: лучше hard fail, чем доверять mutable
+PR state.
+
 CI также запускает:
 
 - `npx repo-guard` — валидацию политики;
@@ -785,8 +834,8 @@ node src/repo-guard.mjs check-diff --format summary
 - `repo-guard` не оставляет комментарии в PR.
 - `check-diff --contract` читает JSON-файл; YAML-контракт поддерживается в
   Markdown-блоках PR или issue.
-- `paths.governance_paths`, `paths.public_api` и `contract.overrides` не
-  изменяют поведение применения правил.
+- `paths.public_api` и `contract.overrides` не изменяют поведение применения
+  правил.
 - `integration` извлекает факты из workflow, template, docs и profile files,
   но не применяет их как blocking enforcement.
 - Проверки работают по git diff и метаданным политики; корректность продукта

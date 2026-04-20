@@ -29,3 +29,28 @@ export function getDiff(base, head, cwd) {
   if (staged.trim()) return staged;
   return runGit(["diff", "HEAD"], { cwd });
 }
+
+export function readFileAtRef(ref, path, cwd) {
+  if (!ref || !path) return null;
+  return runGit(["show", `${ref}:${path}`], { cwd });
+}
+
+export function readBaseGovernancePaths(base, cwd, policyPath = "repo-policy.json") {
+  if (!base) return { governancePaths: null, error: "no_base_ref" };
+  let raw;
+  try {
+    raw = readFileAtRef(base, policyPath, cwd);
+  } catch (e) {
+    return { governancePaths: null, error: `git_show_failed: ${e.message}` };
+  }
+  if (raw == null) return { governancePaths: null, error: "empty_base_policy" };
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    return { governancePaths: null, error: `base_policy_parse_error: ${e.message}` };
+  }
+  const list = parsed?.paths?.governance_paths;
+  if (!Array.isArray(list)) return { governancePaths: [], error: null };
+  return { governancePaths: list, error: null };
+}

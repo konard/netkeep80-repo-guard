@@ -75,3 +75,20 @@ export function resolveContract(prBody, issueBody) {
 
   return issueResult;
 }
+
+const PRIVILEGED_AUTHORIZATION_FIELDS = ["authorized_governance_paths"];
+
+export function extractIssueAuthorization(issueBody) {
+  if (!issueBody) return null;
+  const result = extractContract(issueBody);
+  if (!result.ok) return null;
+  const authorization = {};
+  let hasAny = false;
+  for (const field of PRIVILEGED_AUTHORIZATION_FIELDS) {
+    if (Object.hasOwn(result.contract, field)) {
+      authorization[field] = result.contract[field];
+      hasAny = true;
+    }
+  }
+  return hasAny ? authorization : null;
+}

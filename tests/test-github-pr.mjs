@@ -148,6 +148,52 @@ Fixes #10
   expect("integration valid: linked issue", issues[0], 10);
 }
 
+// --- Integration: issue body carries privileged authorization alongside PR-body change contract ---
+
+{
+  const prBody = `
+## Description
+Edits governance files.
+
+\`\`\`repo-guard-yaml
+change_type: feature
+scope:
+  - schemas/
+budgets: {}
+must_touch: []
+must_not_touch: []
+expected_effects:
+  - edit governance
+\`\`\`
+
+Fixes #77
+`;
+  const issueBody = `
+\`\`\`repo-guard-yaml
+change_type: feature
+scope:
+  - schemas/
+budgets: {}
+must_touch: []
+must_not_touch: []
+expected_effects:
+  - edit governance
+authorized_governance_paths:
+  - schemas/**
+\`\`\`
+`;
+
+  const facts = resolvePRContractFacts({ prBody, issueBody });
+  expect("split-source: adapter ok", facts.ok, true);
+  expect("split-source: change contract from PR body", facts.contractSource, "pr body");
+  expect(
+    "split-source: issueAuthorization carries authorized_governance_paths",
+    Array.isArray(facts.issueAuthorization?.authorized_governance_paths) &&
+      facts.issueAuthorization.authorized_governance_paths[0] === "schemas/**",
+    true
+  );
+}
+
 // --- Integration: simulated PR with no contract, issue fallback ---
 
 {
@@ -242,6 +288,211 @@ Feature request.
   expect("check-pr rejects shell-looking base ref", result.status, 1);
   expect("check-pr reports git diff failure", output.includes("git diff failed"), true);
   expect("check-pr does not execute injected command", existsSync(marker), false);
+
+  rmSync(tmp, { recursive: true });
+}
+
+// --- check-pr fetches linked issue body for privileged authorization even when PR body has a contract ---
+
+{
+  const { mkdirSync } = await import("node:fs");
+  const tmp = mkdtempSync(join(tmpdir(), "rg-issue-fetch-"));
+  execSync("git init", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.email test@test.com", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.name Test", { cwd: tmp, stdio: "pipe" });
+
+  const policy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: { forbidden: [], canonical_docs: ["README.md"], governance_paths: ["schemas/**"] },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(policy));
+  writeFileSync(join(tmp, "a.txt"), "a\n");
+  execSync("git add -A && git commit -m init", { cwd: tmp, stdio: "pipe" });
+
+  mkdirSync(join(tmp, "schemas"), { recursive: true });
+  writeFileSync(join(tmp, "schemas/change-contract.schema.json"), "changed\n");
+  execSync("git add -A && git commit -m 'touch governance'", { cwd: tmp, stdio: "pipe" });
+
+  const eventFile = join(tmp, "event.json");
+  const prContract = {
+    change_type: "feature",
+    scope: ["schemas/"],
+    budgets: { max_new_files: 5, max_net_added_lines: 500 },
+    must_touch: [],
+    must_not_touch: [],
+    expected_effects: ["edit governance"],
+  };
+  const prBody = "```repo-guard-json\n" + JSON.stringify(prContract) + "\n```\n\nFixes #77";
+  writeFileSync(eventFile, JSON.stringify({
+    pull_request: {
+      number: 42,
+      base: { sha: "HEAD~1" },
+      head: { sha: "HEAD" },
+      body: prBody,
+    },
+    repository: { full_name: "owner/repo" },
+  }));
+
+  // Fake `gh` that responds with an issue body carrying privileged authorization.
+  const fakeGhDir = mkdtempSync(join(tmpdir(), "rg-fake-gh-"));
+  const fakeGh = join(fakeGhDir, "gh");
+  const issueBody = [
+    "```repo-guard-yaml",
+    "authorized_governance_paths:",
+    "  - schemas/**",
+    "```",
+  ].join("\n");
+  writeFileSync(
+    fakeGh,
+    `#!/usr/bin/env node\nif (process.argv.includes("--version")) { console.log("gh 0.0"); process.exit(0); }\nconst body = ${JSON.stringify(issueBody)};\nprocess.stdout.write(body);\n`
+  );
+  execSync(`chmod +x ${fakeGh}`);
+
+  const result = runRepoGuard(["--repo-root", tmp, "check-pr"], {
+    env: {
+      ...process.env,
+      GITHUB_EVENT_PATH: eventFile,
+      PATH: `${fakeGhDir}:${process.env.PATH}`,
+    },
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  expect(
+    "check-pr fetches issue body when PR body has contract: authorization applied",
+    output.includes("PASS: governance-change-authorization"),
+    true
+  );
+  expect(
+    "check-pr fetches issue body when PR body has contract: no FAIL",
+    output.includes("FAIL: governance-change-authorization"),
+    false
+  );
+
+  rmSync(tmp, { recursive: true });
+  rmSync(fakeGhDir, { recursive: true });
+}
+
+// --- check-pr fails closed when base repo-policy.json cannot be read (no fallback to head policy) ---
+
+{
+  const tmp = mkdtempSync(join(tmpdir(), "rg-fail-closed-missing-base-"));
+  execSync("git init", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.email test@test.com", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.name Test", { cwd: tmp, stdio: "pipe" });
+
+  // Base commit: no repo-policy.json present (simulates a broken / unreadable base policy).
+  writeFileSync(join(tmp, "a.txt"), "a\n");
+  execSync("git add -A && git commit -m init-no-policy", { cwd: tmp, stdio: "pipe" });
+  const baseSha = execSync("git rev-parse HEAD", { cwd: tmp, encoding: "utf-8" }).trim();
+
+  // Head commit: policy file appears with NO governance_paths (i.e. head policy
+  // would say "no boundary" — exactly the bypass the rule must defend against).
+  const headPolicy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: { forbidden: [], canonical_docs: ["README.md"], governance_paths: [] },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(headPolicy));
+  writeFileSync(join(tmp, "a.txt"), "a\nb\n");
+  execSync("git add -A && git commit -m head-introduces-policy-without-boundary", { cwd: tmp, stdio: "pipe" });
+
+  const eventFile = join(tmp, "event.json");
+  writeFileSync(eventFile, JSON.stringify({
+    pull_request: {
+      number: 42,
+      base: { sha: baseSha },
+      head: { sha: "HEAD" },
+      body: "```repo-guard-json\n{\"change_type\":\"chore\",\"scope\":[\"a.txt\"],\"budgets\":{\"max_new_files\":5,\"max_net_added_lines\":500},\"must_touch\":[],\"must_not_touch\":[],\"expected_effects\":[\"x\"]}\n```",
+    },
+    repository: { full_name: "owner/repo" },
+  }));
+
+  const result = runRepoGuard(["--repo-root", tmp, "check-pr"], {
+    env: { ...process.env, GITHUB_EVENT_PATH: eventFile },
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  expect(
+    "fail-closed (missing base policy): exits non-zero",
+    result.status,
+    1
+  );
+  expect(
+    "fail-closed (missing base policy): governance-trusted-boundary fails",
+    output.includes("FAIL: governance-trusted-boundary"),
+    true
+  );
+  expect(
+    "fail-closed (missing base policy): does NOT fall back to head policy with WARN",
+    output.includes("falling back to head policy"),
+    false
+  );
+
+  rmSync(tmp, { recursive: true });
+}
+
+// --- check-pr fails closed when base repo-policy.json is unparseable JSON ---
+
+{
+  const tmp = mkdtempSync(join(tmpdir(), "rg-fail-closed-bad-base-"));
+  execSync("git init", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.email test@test.com", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.name Test", { cwd: tmp, stdio: "pipe" });
+
+  // Base commit: repo-policy.json is invalid JSON.
+  writeFileSync(join(tmp, "repo-policy.json"), "not valid json {{{");
+  writeFileSync(join(tmp, "a.txt"), "a\n");
+  execSync("git add -A && git commit -m init-broken-policy", { cwd: tmp, stdio: "pipe" });
+  const baseSha = execSync("git rev-parse HEAD", { cwd: tmp, encoding: "utf-8" }).trim();
+
+  // Head commit: replace policy with a valid one (so head loads); make a benign edit too.
+  const headPolicy = {
+    policy_format_version: "0.1.0",
+    repository_kind: "library",
+    paths: { forbidden: [], canonical_docs: ["README.md"], governance_paths: ["repo-policy.json"] },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    content_rules: [],
+    cochange_rules: [],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(headPolicy));
+  writeFileSync(join(tmp, "a.txt"), "a\nb\n");
+  execSync("git add -A && git commit -m head-fixes-policy", { cwd: tmp, stdio: "pipe" });
+
+  const eventFile = join(tmp, "event.json");
+  writeFileSync(eventFile, JSON.stringify({
+    pull_request: {
+      number: 42,
+      base: { sha: baseSha },
+      head: { sha: "HEAD" },
+      body: "```repo-guard-json\n{\"change_type\":\"chore\",\"scope\":[\"a.txt\"],\"budgets\":{\"max_new_files\":5,\"max_net_added_lines\":500},\"must_touch\":[],\"must_not_touch\":[],\"expected_effects\":[\"x\"]}\n```",
+    },
+    repository: { full_name: "owner/repo" },
+  }));
+
+  const result = runRepoGuard(["--repo-root", tmp, "check-pr"], {
+    env: { ...process.env, GITHUB_EVENT_PATH: eventFile },
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  expect(
+    "fail-closed (unparseable base policy): exits non-zero",
+    result.status,
+    1
+  );
+  expect(
+    "fail-closed (unparseable base policy): governance-trusted-boundary fails",
+    output.includes("FAIL: governance-trusted-boundary"),
+    true
+  );
+  expect(
+    "fail-closed (unparseable base policy): does NOT fall back to head policy",
+    output.includes("falling back to head policy"),
+    false
+  );
 
   rmSync(tmp, { recursive: true });
 }

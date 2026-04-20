@@ -98,6 +98,12 @@
         }
       }
     },
+    "authorized_governance_paths": {
+      "type": "array",
+      "description": "Glob patterns listing governance files the change is sanctioned to modify. This is a privileged field: it unlocks changes to policy.paths.governance_paths only when present in the repo-guard contract carried by the linked issue body. Declared in the PR body it is accepted by the schema but ignored as an authorization source at runtime, so an AI agent cannot self-authorize policy changes in the same PR that edits them.",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
     "must_touch": {
       "type": "array",
       "items": { "type": "string" },

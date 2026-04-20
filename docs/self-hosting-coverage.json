@@ -95,6 +95,11 @@
         "self_use": "repo-policy.json:paths.forbidden",
         "notes": "Forbids docs/phase-*, docs/history-*, and *.bak."
       },
+      "governance-paths": {
+        "status": "self_used",
+        "self_use": "repo-policy.json:paths.governance_paths",
+        "notes": "Blocks changes to the policy, schemas, workflow, and templates governance files unless the change contract carried by the linked issue explicitly declares authorized_governance_paths."
+      },
       "diff_rules_budgets": {
         "status": "self_used",
         "self_use": "repo-policy.json:diff_rules",
