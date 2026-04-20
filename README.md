@@ -280,9 +280,19 @@ jobs:
 `integration` описывает, как downstream-репозиторий должен подключать
 `repo-guard`: какой workflow запускает проверку, какие шаблоны содержат
 contract block, какие документы объясняют contract/profile/anchor-практики и
-где описаны профили. Это декларативный слой политики. Текущая версия принимает
-и валидирует форму секции, но не читает YAML/Markdown-файлы и не применяет эти
-правила как runtime enforcement.
+где описаны профили. Это декларативный слой политики: `repo-guard` читает
+перечисленные YAML/Markdown-файлы и строит normalized facts, но не применяет
+их как runtime enforcement rules.
+
+`buildPolicyFacts(...).integration` содержит:
+
+| Факт | Что извлекается |
+| --- | --- |
+| `workflows` | GitHub Actions events, permissions, `uses`, `with`, `env`, `if` и публикация в `$GITHUB_STEP_SUMMARY` |
+| `templates` | Наличие fenced `repo-guard-yaml` / `repo-guard-json` blocks и поля контракта |
+| `docs` | Markdown headings, code blocks и упоминания из `must_mention` |
+| `profiles` | Идентификаторы профилей, migration target mentions и ссылки на имя профиля |
+| `errors` | Явные ошибки чтения, malformed YAML, malformed contract blocks и незакрытые Markdown fences |
 
 Пример:
 
@@ -499,7 +509,7 @@ node src/repo-guard.mjs check-diff --format summary
 | `src/markdown-contract.mjs` | Извлечение контракта из Markdown |
 | `src/runtime/` | Валидация и общий конвейер политики |
 | `src/checks/` | Оркестрация проверок политики |
-| `src/extractors/` | Извлекатели якорей |
+| `src/extractors/` | Извлекатели якорей и integration facts |
 | `schemas/` | JSON Schemas для политики и контракта |
 | `templates/` | Примеры политики, рабочего процесса и контрактов |
 | `tests/` | Модульные и интеграционные тесты |
@@ -511,7 +521,7 @@ node src/repo-guard.mjs check-diff --format summary
   Markdown-блоках PR или issue.
 - `paths.governance_paths`, `paths.public_api` и `contract.overrides` не
   изменяют поведение применения правил.
-- `integration` описывает ожидаемую интеграцию, но не проверяет содержимое
-  workflow, template или docs файлов.
+- `integration` извлекает факты из workflow, template, docs и profile files,
+  но не применяет их как blocking enforcement.
 - Проверки работают по git diff и метаданным политики; корректность продукта
   остается задачей тестов, review и специализированных анализаторов.

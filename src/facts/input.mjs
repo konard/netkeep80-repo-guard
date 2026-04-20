@@ -6,6 +6,7 @@ import {
   classifyNewFiles,
 } from "../diff-checker.mjs";
 import { extractAnchors } from "../extractors/anchors.mjs";
+import { extractIntegration } from "../extractors/integration.mjs";
 
 export function listTrackedFiles(repoRoot) {
   return execSync("git ls-files", { encoding: "utf-8", cwd: repoRoot })
@@ -43,6 +44,12 @@ export function buildPolicyFacts({
     changedFiles: checkedFiles,
     readFile,
   });
+  const integration = extractIntegration(policy, {
+    repoRoot: repositoryRoot,
+    trackedFiles: resolvedTrackedFiles,
+    changedFiles: checkedFiles,
+    readFile,
+  });
 
   return {
     mode,
@@ -60,6 +67,7 @@ export function buildPolicyFacts({
       },
     },
     anchors,
+    integration,
     trackedFiles: resolvedTrackedFiles,
     derived: {
       changedPaths,
