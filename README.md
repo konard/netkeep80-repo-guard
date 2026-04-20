@@ -333,6 +333,20 @@ contract block, какие документы объясняют contract/profil
 | `profiles` | Идентификаторы профилей, migration target mentions и ссылки на имя профиля |
 | `errors` | Явные ошибки чтения, malformed YAML, malformed contract blocks и незакрытые Markdown fences |
 
+Template rules могут дополнительно требовать конкретный fenced block kind
+через `required_block_kind`, поля внутри примера контракта через
+`required_contract_fields`, а fallback issue template можно объявить
+`optional: true`. Optional template не считается ошибкой, если файл отсутствует,
+но проверяется обычными template rules, когда файл есть.
+
+Doc rules поддерживают несколько типов обязательных ссылок:
+`must_mention` для общих терминов, `must_reference_files` для путей файлов,
+`must_mention_profiles` для integration profile ids и
+`must_mention_contract_fields` для contract field anchors вроде
+`change_type`, `scope` или `anchors.affects`. Ошибки template rules и doc
+rules остаются в разных diagnostics: `integration-templates` и
+`integration-docs`.
+
 Проверить integration layer как отдельный продуктовый diagnostic:
 
 ```bash
@@ -388,7 +402,18 @@ normalized `integration` facts, `ruleResults`, `violations`, `diagnostics` и
         "kind": "markdown",
         "path": ".github/PULL_REQUEST_TEMPLATE.md",
         "requires_contract_block": true,
+        "required_block_kind": "repo-guard-yaml",
+        "required_contract_fields": ["change_type", "scope", "anchors.affects"],
         "profiles": ["requirements-strict"]
+      },
+      {
+        "id": "change-contract-issue-form",
+        "kind": "github_issue_form",
+        "path": ".github/ISSUE_TEMPLATE/change-contract.yml",
+        "requires_contract_block": true,
+        "optional": true,
+        "required_block_kind": "repo-guard-yaml",
+        "required_contract_fields": ["change_type", "scope"]
       }
     ],
     "docs": [
@@ -397,6 +422,9 @@ normalized `integration` facts, `ruleResults`, `violations`, `diagnostics` и
         "kind": "markdown",
         "path": "README.md",
         "must_mention": ["repo-guard", "anchors.affects"],
+        "must_reference_files": ["repo-policy.json", ".github/PULL_REQUEST_TEMPLATE.md"],
+        "must_mention_profiles": ["requirements-strict"],
+        "must_mention_contract_fields": ["change_type", "scope", "anchors.affects"],
         "profiles": ["requirements-strict"]
       }
     ],

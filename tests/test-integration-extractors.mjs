@@ -53,12 +53,17 @@ function makePolicy(overrides = {}) {
           kind: "markdown",
           path: ".github/PULL_REQUEST_TEMPLATE.md",
           requires_contract_block: true,
+          required_block_kind: "repo-guard-yaml",
+          required_contract_fields: ["change_type", "scope", "anchors.affects"],
         },
         {
           id: "change-contract-issue-form",
           kind: "github_issue_form",
           path: ".github/ISSUE_TEMPLATE/change-contract.yml",
           requires_contract_block: true,
+          optional: true,
+          required_block_kind: "repo-guard-yaml",
+          required_contract_fields: ["change_type", "expected_effects"],
         },
       ],
       docs: [
@@ -66,6 +71,9 @@ function makePolicy(overrides = {}) {
           id: "readme",
           path: "README.md",
           must_mention: ["repo-guard", "contract", "integration", "anchors.affects"],
+          must_reference_files: ["repo-policy.json"],
+          must_mention_profiles: ["self-hosting"],
+          must_mention_contract_fields: ["anchors.affects"],
         },
       ],
       profiles: [
@@ -155,6 +163,8 @@ const files = {
     "# Repo Guard",
     "",
     "Uses repo-guard contract and integration policy.",
+    "See repo-policy.json for integration configuration.",
+    "Documented contract field: anchors.affects.",
     "",
     "```bash",
     "repo-guard check-pr",
@@ -221,6 +231,13 @@ console.log("\n--- integration extractor builds normalized workflow, template, d
 
   const prTemplate = extraction.templates.find((template) => template.id === "pull-request-template");
   const issueTemplate = extraction.templates.find((template) => template.id === "change-contract-issue-form");
+  expect("template exposes configured block kind requirement", prTemplate?.requiredBlockKind, "repo-guard-yaml");
+  expect("template exposes configured contract field requirements", prTemplate?.requiredContractFields, [
+    "change_type",
+    "scope",
+    "anchors.affects",
+  ]);
+  expect("issue template exposes optional fallback metadata", issueTemplate?.optional, true);
   expect("markdown template detects repo-guard-yaml block", prTemplate?.hasRepoGuardYamlBlock, true);
   expect("markdown template extracts nested contract field names", prTemplate?.contractFieldNames, [
     "anchors",
@@ -235,11 +252,20 @@ console.log("\n--- integration extractor builds normalized workflow, template, d
   const doc = extraction.docs[0];
   expect("docs expose headings", doc.headings, [{ level: 1, text: "Repo Guard", line: 1 }]);
   expect("docs expose code block presence", doc.codeBlocks, [
-    { language: "bash", infoString: "bash", startLine: 5, endLine: 7 },
+    { language: "bash", infoString: "bash", startLine: 7, endLine: 9 },
   ]);
   expect("docs expose text mention facts",
     doc.mentions.map((mention) => `${mention.term}:${mention.present}:${mention.count}`),
-    ["repo-guard:true:2", "contract:true:1", "integration:true:1", "anchors.affects:false:0"]);
+    ["repo-guard:true:2", "contract:true:2", "integration:true:2", "anchors.affects:true:1"]);
+  expect("docs expose file reference facts",
+    doc.fileReferences.map((mention) => `${mention.term}:${mention.present}:${mention.count}`),
+    ["repo-policy.json:true:1"]);
+  expect("docs expose profile mention facts",
+    doc.profileMentions.map((mention) => `${mention.term}:${mention.present}:${mention.count}`),
+    ["self-hosting:true:2"]);
+  expect("docs expose contract field mention facts",
+    doc.contractFieldMentions.map((mention) => `${mention.term}:${mention.present}:${mention.count}`),
+    ["anchors.affects:true:1"]);
 
   const profile = extraction.profiles[0];
   expect("profile docs expose configured profile identifiers",

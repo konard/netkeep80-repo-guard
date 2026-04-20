@@ -265,34 +265,69 @@ const integrationSectionRules = {
   workflows: {
     requiredStrings: ["id", "kind", "path", "role"],
     requiredBooleans: [],
+    optionalBooleans: [],
     requiredStringArrays: [],
     optionalStringArrays: ["profiles"],
+    profileReferenceArrays: new Set(["profiles"]),
     allowedFields: new Set(["id", "kind", "path", "role", "expect", "profiles"]),
     kinds: new Set(["github_actions"]),
     roles: new Set(["repo_guard_advisory", "repo_guard_policy_validation", "repo_guard_pr_gate"]),
   },
   templates: {
     requiredStrings: ["id", "kind", "path"],
+    optionalStrings: ["required_block_kind"],
     requiredBooleans: ["requires_contract_block"],
+    optionalBooleans: ["optional"],
     requiredStringArrays: [],
-    optionalStringArrays: ["profiles"],
-    allowedFields: new Set(["id", "kind", "path", "requires_contract_block", "profiles"]),
+    optionalStringArrays: ["profiles", "required_contract_fields"],
+    profileReferenceArrays: new Set(["profiles"]),
+    allowedFields: new Set([
+      "id",
+      "kind",
+      "path",
+      "requires_contract_block",
+      "optional",
+      "required_block_kind",
+      "required_contract_fields",
+      "profiles",
+    ]),
     kinds: new Set(["github_issue_form", "markdown"]),
+    stringEnums: {
+      required_block_kind: new Set(["repo-guard-json", "repo-guard-yaml"]),
+    },
   },
   docs: {
     requiredStrings: ["id", "path"],
     optionalStrings: ["kind"],
     requiredBooleans: [],
+    optionalBooleans: [],
     requiredStringArrays: ["must_mention"],
-    optionalStringArrays: ["profiles"],
-    allowedFields: new Set(["id", "kind", "path", "must_mention", "profiles"]),
+    optionalStringArrays: [
+      "profiles",
+      "must_reference_files",
+      "must_mention_profiles",
+      "must_mention_contract_fields",
+    ],
+    profileReferenceArrays: new Set(["profiles", "must_mention_profiles"]),
+    allowedFields: new Set([
+      "id",
+      "kind",
+      "path",
+      "must_mention",
+      "must_reference_files",
+      "must_mention_profiles",
+      "must_mention_contract_fields",
+      "profiles",
+    ]),
     kinds: new Set(["markdown"]),
   },
   profiles: {
     requiredStrings: ["id", "doc_path"],
     requiredBooleans: [],
+    optionalBooleans: [],
     requiredStringArrays: [],
     optionalStringArrays: [],
+    profileReferenceArrays: new Set(),
     allowedFields: new Set(["id", "doc_path"]),
   },
 };
@@ -363,14 +398,16 @@ function validateIntegrationString(errors, section, index, entry, field, { requi
   return true;
 }
 
-function validateIntegrationBoolean(errors, section, index, entry, field) {
+function validateIntegrationBoolean(errors, section, index, entry, field, { required = true } = {}) {
   if (!Object.hasOwn(entry, field)) {
-    errors.push(compileIntegrationError(
-      section,
-      index,
-      field,
-      `integration.${section}[${index}].${field} is required`
-    ));
+    if (required) {
+      errors.push(compileIntegrationError(
+        section,
+        index,
+        field,
+        `integration.${section}[${index}].${field} is required`
+      ));
+    }
     return false;
   }
 
@@ -734,14 +771,25 @@ export function compileIntegrationPolicy(policy) {
         validateIntegrationBoolean(errors, section, index, entry, field);
       }
 
+      for (const field of rules.optionalBooleans || []) {
+        validateIntegrationBoolean(errors, section, index, entry, field, { required: false });
+      }
+
       for (const field of rules.requiredStringArrays || []) {
-        validateIntegrationStringArray(errors, section, index, entry, field);
+        const references = validateIntegrationStringArray(errors, section, index, entry, field);
+        if (rules.profileReferenceArrays?.has(field)) {
+          for (const profileId of references) {
+            profileReferences.push({ section, index, field, profileId });
+          }
+        }
       }
 
       for (const field of rules.optionalStringArrays || []) {
         const references = validateIntegrationStringArray(errors, section, index, entry, field, { required: false });
-        for (const profileId of references) {
-          profileReferences.push({ section, index, field, profileId });
+        if (rules.profileReferenceArrays?.has(field)) {
+          for (const profileId of references) {
+            profileReferences.push({ section, index, field, profileId });
+          }
         }
       }
 
@@ -762,6 +810,17 @@ export function compileIntegrationPolicy(policy) {
           "role",
           `integration.${section}[${index}].role must be one of ${formatAllowed(rules.roles)}`,
           { value: entry.role }
+        ));
+      }
+
+      for (const [field, allowedValues] of Object.entries(rules.stringEnums || {})) {
+        if (!hasNonEmptyString(entry, field) || allowedValues.has(entry[field])) continue;
+        errors.push(compileIntegrationError(
+          section,
+          index,
+          field,
+          `integration.${section}[${index}].${field} must be one of ${formatAllowed(allowedValues)}`,
+          { value: entry[field] }
         ));
       }
 

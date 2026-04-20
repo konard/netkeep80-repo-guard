@@ -373,6 +373,9 @@ describe("integration policy compilation", () => {
             kind: "markdown",
             path: ".github/PULL_REQUEST_TEMPLATE.md",
             requires_contract_block: true,
+            optional: true,
+            required_block_kind: "repo-guard-yaml",
+            required_contract_fields: ["change_type", "scope", "anchors.affects"],
             profiles: ["requirements-strict"],
           },
         ],
@@ -382,6 +385,9 @@ describe("integration policy compilation", () => {
             kind: "markdown",
             path: "README.md",
             must_mention: ["repo-guard"],
+            must_reference_files: ["repo-policy.json"],
+            must_mention_profiles: ["requirements-strict"],
+            must_mention_contract_fields: ["anchors.affects"],
             profiles: ["requirements-strict"],
           },
         ],
@@ -557,6 +563,43 @@ describe("integration policy compilation", () => {
     assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.token_env must contain at least one")));
     assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.summary must be a boolean")));
     assert.ok(errors.some((e) => e.message.includes("integration.workflows[0].expect.disallow[1] must be one of")));
+  });
+
+  it("rejects malformed generalized template and doc integration rules", () => {
+    const errors = compileIntegrationPolicy({
+      integration: {
+        templates: [
+          {
+            id: "pull-request-template",
+            kind: "markdown",
+            path: ".github/PULL_REQUEST_TEMPLATE.md",
+            requires_contract_block: true,
+            optional: "yes",
+            required_block_kind: "repo-guard-xml",
+            required_contract_fields: ["change_type", ""],
+          },
+        ],
+        docs: [
+          {
+            id: "readme",
+            kind: "markdown",
+            path: "README.md",
+            must_mention: ["repo-guard"],
+            must_reference_files: [],
+            must_mention_profiles: ["missing-profile"],
+            must_mention_contract_fields: [""],
+          },
+        ],
+        profiles: [],
+      },
+    });
+
+    assert.ok(errors.some((e) => e.message.includes("integration.templates[0].optional must be a boolean")));
+    assert.ok(errors.some((e) => e.message.includes("integration.templates[0].required_block_kind must be one of")));
+    assert.ok(errors.some((e) => e.message.includes("integration.templates[0].required_contract_fields[1] must be a non-empty string")));
+    assert.ok(errors.some((e) => e.message.includes("integration.docs[0].must_reference_files must contain at least one")));
+    assert.ok(errors.some((e) => e.message.includes("integration.docs[0].must_mention_contract_fields[0] must be a non-empty string")));
+    assert.ok(errors.some((e) => e.message.includes("missing-profile")));
   });
 
   it("rejects profile references that do not resolve to integration.profiles ids", () => {

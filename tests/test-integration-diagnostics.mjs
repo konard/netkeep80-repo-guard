@@ -101,12 +101,17 @@ function basePolicy(overrides = {}) {
           kind: "markdown",
           path: ".github/PULL_REQUEST_TEMPLATE.md",
           requires_contract_block: true,
+          required_block_kind: "repo-guard-yaml",
+          required_contract_fields: ["change_type", "scope"],
         },
         {
           id: "change-contract-issue-form",
           kind: "github_issue_form",
           path: ".github/ISSUE_TEMPLATE/change-contract.yml",
           requires_contract_block: true,
+          optional: true,
+          required_block_kind: "repo-guard-yaml",
+          required_contract_fields: ["change_type", "scope"],
         },
       ],
       docs: [
@@ -115,6 +120,9 @@ function basePolicy(overrides = {}) {
           kind: "markdown",
           path: "README.md",
           must_mention: ["repo-guard", "contract", "integration"],
+          must_reference_files: ["repo-policy.json", ".github/PULL_REQUEST_TEMPLATE.md"],
+          must_mention_profiles: ["self-hosting"],
+          must_mention_contract_fields: ["change_type", "scope"],
           profiles: ["self-hosting"],
         },
       ],
@@ -202,6 +210,8 @@ function makeRepo() {
     "# Test Repo",
     "",
     "This repository documents repo-guard contract integration for self-hosting.",
+    "The repo-policy.json file declares the .github/PULL_REQUEST_TEMPLATE.md contract wiring.",
+    "Required contract fields include change_type and scope.",
     "Profile id: self-hosting",
     "",
   ].join("\n"));
@@ -269,7 +279,28 @@ console.log("\n--- validate-integration --format json emits normalized integrati
     parsed?.integration?.workflows?.[0]?.stepInputs?.find((fact) => fact.uses === "netkeep80/repo-guard@v1.2.3")?.inputs,
     { enforcement: "blocking", mode: "check-pr" });
   expect("template diagnostics pass", parsed?.ruleResults?.some((rule) => rule.rule === "integration-templates" && rule.ok), true);
+  expect("doc diagnostics pass", parsed?.ruleResults?.some((rule) => rule.rule === "integration-docs" && rule.ok), true);
   expect("stats include declared templates", parsed?.diagnostics?.declared?.templates, 2);
+
+  rmSync(dir, { recursive: true });
+}
+
+console.log("\n--- optional issue-template fallback may be absent ---");
+{
+  const dir = makeRepo();
+  rmSync(join(dir, ".github", "ISSUE_TEMPLATE", "change-contract.yml"));
+  const result = runGuard([
+    "--repo-root", dir,
+    "validate-integration",
+    "--format", "json",
+  ]);
+  const parsed = JSON.parse(result.stdout);
+
+  expect("missing optional issue template exits 0", result.code, 0);
+  expect("optional template fact is still emitted",
+    parsed.integration.templates.find((template) => template.id === "change-contract-issue-form")?.present,
+    false);
+  expect("optional template does not create artifact errors", parsed.diagnostics.artifactErrors, []);
 
   rmSync(dir, { recursive: true });
 }
@@ -310,8 +341,11 @@ console.log("\n--- validate-integration --format summary reports CI-readable dia
   expectIncludes("manual clone diagnostic appears", result.output, "must not clone repo-guard manually");
   expectIncludes("direct temp CLI diagnostic appears", result.output, "must not run repo-guard directly from a temporary clone");
   expectIncludes("summary diagnostic appears", result.output, "must publish to GITHUB_STEP_SUMMARY");
-  expectIncludes("template diagnostic appears", result.output, "requires a repo-guard contract block");
+  expectIncludes("template diagnostic appears", result.output, "requires a repo-guard-yaml fenced contract block");
   expectIncludes("doc diagnostic appears", result.output, "missing required mention");
+  expectIncludes("doc file reference diagnostic appears", result.output, "missing required file reference");
+  expectIncludes("doc profile mention diagnostic appears", result.output, "missing required profile mention");
+  expectIncludes("doc contract field diagnostic appears", result.output, "missing required contract field mention");
 
   rmSync(dir, { recursive: true });
 }

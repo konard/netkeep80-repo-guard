@@ -445,22 +445,46 @@ function templateDiagnostics(integration) {
   const details = [];
 
   for (const template of integration.templates) {
-    if (!template.requiresContractBlock) continue;
-    if (template.hasRepoGuardYamlBlock || template.hasRepoGuardJsonBlock) continue;
-    details.push(`${template.path}: ${template.id} requires a repo-guard contract block`);
+    if (template.present === false && template.optional) continue;
+
+    const contractBlocks = template.contractBlocks || [];
+    if (template.requiredBlockKind) {
+      const hasRequiredKind = contractBlocks.some((block) => block.format === template.requiredBlockKind);
+      if (!hasRequiredKind) {
+        details.push(`${template.path}: ${template.id} requires a ${template.requiredBlockKind} fenced contract block`);
+      }
+    } else if (template.requiresContractBlock && !template.hasRepoGuardYamlBlock && !template.hasRepoGuardJsonBlock) {
+      details.push(`${template.path}: ${template.id} requires a repo-guard contract block`);
+    }
+
+    const fieldSourceBlocks = template.requiredBlockKind
+      ? contractBlocks.filter((block) => block.format === template.requiredBlockKind)
+      : contractBlocks;
+    const fields = new Set(fieldSourceBlocks.flatMap((block) => block.fieldPaths || []));
+    for (const field of template.requiredContractFields || []) {
+      if (fields.has(field)) continue;
+      details.push(`${template.path}: ${template.id} contract block missing required field "${field}"`);
+    }
   }
 
   return details;
+}
+
+function reportMissingMentions(details, doc, facts, label) {
+  for (const mention of facts || []) {
+    if (mention.present) continue;
+    details.push(`${doc.path}: missing required ${label} "${mention.term}"`);
+  }
 }
 
 function docDiagnostics(integration) {
   const details = [];
 
   for (const doc of integration.docs) {
-    for (const mention of doc.mentions) {
-      if (mention.present) continue;
-      details.push(`${doc.path}: missing required mention "${mention.term}"`);
-    }
+    reportMissingMentions(details, doc, doc.mentions, "mention");
+    reportMissingMentions(details, doc, doc.fileReferences, "file reference");
+    reportMissingMentions(details, doc, doc.profileMentions, "profile mention");
+    reportMissingMentions(details, doc, doc.contractFieldMentions, "contract field mention");
   }
 
   return details;

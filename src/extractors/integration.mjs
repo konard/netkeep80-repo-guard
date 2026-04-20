@@ -372,7 +372,11 @@ function templateFactFromMarkdown(entry, markdown) {
       id: entry.id,
       kind: entry.kind,
       path: entry.path,
+      present: true,
+      optional: Boolean(entry.optional),
       requiresContractBlock: Boolean(entry.requires_contract_block),
+      requiredBlockKind: entry.required_block_kind || null,
+      requiredContractFields: entry.required_contract_fields || [],
       hasRepoGuardYamlBlock: blocks.some((block) => block.format === "repo-guard-yaml"),
       hasRepoGuardJsonBlock: blocks.some((block) => block.format === "repo-guard-json"),
       contractBlocks: blocks,
@@ -421,13 +425,36 @@ function collectIssueFormTemplateFacts(entry, content) {
       id: entry.id,
       kind: entry.kind,
       path: entry.path,
+      present: true,
+      optional: Boolean(entry.optional),
       requiresContractBlock: Boolean(entry.requires_contract_block),
+      requiredBlockKind: entry.required_block_kind || null,
+      requiredContractFields: entry.required_contract_fields || [],
       hasRepoGuardYamlBlock: blocks.some((block) => block.format === "repo-guard-yaml"),
       hasRepoGuardJsonBlock: blocks.some((block) => block.format === "repo-guard-json"),
       contractBlocks: blocks,
       contractFieldNames: uniqueSorted(blocks.flatMap((block) => block.fieldPaths)),
     },
     errors,
+  };
+}
+
+function missingOptionalTemplateFact(entry) {
+  return {
+    id: entry.id,
+    kind: entry.kind,
+    path: entry.path,
+    present: false,
+    optional: true,
+    requiresContractBlock: Boolean(entry.requires_contract_block),
+    requiredBlockKind: entry.required_block_kind || null,
+    requiredContractFields: entry.required_contract_fields || [],
+    hasRepoGuardYamlBlock: false,
+    hasRepoGuardJsonBlock: false,
+    contractBlocks: [],
+    contractFieldNames: [],
+    headings: [],
+    codeBlocks: [],
   };
 }
 
@@ -479,6 +506,9 @@ function collectDocFacts(entry, content) {
       codeBlocks: markdown.codeBlocks.map(publicCodeBlock),
       hasCodeBlocks: markdown.codeBlocks.length > 0,
       mentions: (entry.must_mention || []).map((term) => mentionFact(content, term)),
+      fileReferences: (entry.must_reference_files || []).map((term) => mentionFact(content, term)),
+      profileMentions: (entry.must_mention_profiles || []).map((term) => mentionFact(content, term)),
+      contractFieldMentions: (entry.must_mention_contract_fields || []).map((term) => mentionFact(content, term)),
     },
     errors: markdown.errors,
   };
@@ -574,6 +604,15 @@ function withErrorContext(section, entry, message) {
   };
 }
 
+function isMissingRepositoryFileError(error, entry) {
+  const message = String(error?.message || "");
+  return error?.code === "ENOENT" ||
+    message.includes("ENOENT") ||
+    message.includes("no such file or directory") ||
+    message === `cannot read ${entry.path}` ||
+    message.includes(`missing fixture ${entry.path}`);
+}
+
 export function extractIntegration(policy, options = {}) {
   const integration = policy.integration;
   const result = {
@@ -610,7 +649,11 @@ export function extractIntegration(policy, options = {}) {
         withErrorContext("templates", entry, error.message)
       ));
     } catch (e) {
-      result.errors.push(withErrorContext("templates", entry, e.message));
+      if (entry.optional === true && isMissingRepositoryFileError(e, entry)) {
+        result.templates.push(missingOptionalTemplateFact(entry));
+      } else {
+        result.errors.push(withErrorContext("templates", entry, e.message));
+      }
     }
   }
 
