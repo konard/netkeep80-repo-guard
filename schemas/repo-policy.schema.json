@@ -90,7 +90,7 @@
         "governance_paths": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Canonical list of paths that define repository governance. At runtime, check-pr reads this list from the base branch of the PR (the trusted boundary) rather than from the PR's head, so a PR cannot escape governance by narrowing the list in the same diff. Changes to files that match any pattern here require the linked issue body to carry a repo-guard contract block with matching authorized_governance_paths; authorization placed in the PR body is ignored so the change is sanctioned outside the PR an AI agent can author."
+          "description": "Canonical list of paths that define repository governance. In check-pr, runtime policy is read from the base branch of the PR rather than from the PR's head, so a PR cannot relax policy rules or escape governance by narrowing this list in the same diff. Changes to files that match any pattern here require the linked issue body to carry a repo-guard contract block with matching authorized_governance_paths; authorization placed in the PR body is ignored so the change is sanctioned outside the PR an AI agent can author."
         },
         "operational_paths": {
           "type": "array",

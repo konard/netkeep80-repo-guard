@@ -497,5 +497,119 @@ Feature request.
   rmSync(tmp, { recursive: true });
 }
 
+// --- check-pr evaluates rules from the trusted base policy, not the PR head policy ---
+
+{
+  const { mkdirSync } = await import("node:fs");
+  const tmp = mkdtempSync(join(tmpdir(), "rg-base-policy-rules-"));
+  execSync("git init", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.email test@test.com", { cwd: tmp, stdio: "pipe" });
+  execSync("git config user.name Test", { cwd: tmp, stdio: "pipe" });
+
+  const basePolicy = {
+    policy_format_version: "0.3.0",
+    repository_kind: "library",
+    paths: {
+      forbidden: [],
+      canonical_docs: ["README.md"],
+      governance_paths: ["repo-policy.json"],
+    },
+    diff_rules: { max_new_docs: 5, max_new_files: 20, max_net_added_lines: 500 },
+    size_rules: [
+      {
+        id: "base-max-feature-lines",
+        scope: "file",
+        metric: "lines",
+        glob: "src/feature.txt",
+        max: 0,
+        count: "changed_only",
+        level: "blocking",
+      },
+    ],
+    content_rules: [],
+    cochange_rules: [],
+  };
+
+  mkdirSync(join(tmp, "src"), { recursive: true });
+  writeFileSync(join(tmp, "README.md"), "# Test\n");
+  writeFileSync(join(tmp, "src/feature.txt"), "");
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(basePolicy, null, 2));
+  execSync("git add -A && git commit -m init", { cwd: tmp, stdio: "pipe" });
+  const baseSha = execSync("git rev-parse HEAD", { cwd: tmp, encoding: "utf-8" }).trim();
+
+  const relaxedHeadPolicy = {
+    ...basePolicy,
+    size_rules: [
+      {
+        ...basePolicy.size_rules[0],
+        max: 1000,
+      },
+    ],
+  };
+  writeFileSync(join(tmp, "repo-policy.json"), JSON.stringify(relaxedHeadPolicy, null, 2));
+  writeFileSync(join(tmp, "src/feature.txt"), "one line that base policy must reject\n");
+  execSync("git add -A && git commit -m relax-policy-and-change-feature", { cwd: tmp, stdio: "pipe" });
+
+  const prContract = {
+    change_type: "feature",
+    scope: ["repo-policy.json", "src/feature.txt"],
+    budgets: { max_new_files: 5, max_net_added_lines: 500 },
+    must_touch: [],
+    must_not_touch: [],
+    expected_effects: ["exercise base policy"],
+  };
+  const eventFile = join(tmp, "event.json");
+  writeFileSync(eventFile, JSON.stringify({
+    pull_request: {
+      number: 42,
+      base: { sha: baseSha },
+      head: { sha: "HEAD" },
+      body: "```repo-guard-json\n" + JSON.stringify(prContract) + "\n```\n\nFixes #77",
+    },
+    repository: { full_name: "owner/repo" },
+  }));
+
+  const fakeGhDir = mkdtempSync(join(tmpdir(), "rg-fake-gh-"));
+  const fakeGh = join(fakeGhDir, "gh");
+  const issueBody = [
+    "```repo-guard-yaml",
+    "authorized_governance_paths:",
+    "  - repo-policy.json",
+    "```",
+  ].join("\n");
+  writeFileSync(
+    fakeGh,
+    `#!/usr/bin/env node\nif (process.argv.includes("--version")) { console.log("gh 0.0"); process.exit(0); }\nprocess.stdout.write(${JSON.stringify(issueBody)});\n`
+  );
+  execSync(`chmod +x ${fakeGh}`);
+
+  const result = runRepoGuard(["--repo-root", tmp, "check-pr"], {
+    env: {
+      ...process.env,
+      GITHUB_EVENT_PATH: eventFile,
+      PATH: `${fakeGhDir}:${process.env.PATH}`,
+    },
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  expect(
+    "check-pr uses base policy rules: exits non-zero",
+    result.status,
+    1
+  );
+  expect(
+    "check-pr uses base policy rules: size rule fails",
+    output.includes("FAIL: size-rules"),
+    true
+  );
+  expect(
+    "check-pr uses base policy rules: reports base rule id",
+    output.includes("base-max-feature-lines"),
+    true
+  );
+
+  rmSync(tmp, { recursive: true });
+  rmSync(fakeGhDir, { recursive: true });
+}
+
 console.log(`\n${failures === 0 ? "All tests passed" : `${failures} test(s) failed`}`);
 process.exit(failures === 0 ? 0 : 1);

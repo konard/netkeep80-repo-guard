@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { getDiff, readBaseGovernancePaths } from "./git.mjs";
+import { getDiff, readBasePolicy } from "./git.mjs";
 import {
   extractContract,
   extractIssueAuthorization,
@@ -9,7 +9,7 @@ import {
 } from "./markdown-contract.mjs";
 import { warnReservedContractFields } from "./policy-compiler.mjs";
 import { resolveEnforcementMode } from "./enforcement.mjs";
-import { loadPolicyRuntime, validationCheck } from "./runtime/validation.mjs";
+import { loadPolicyRuntime, loadPolicyRuntimeFromObject, validationCheck } from "./runtime/validation.mjs";
 import { runPolicyPipeline } from "./runtime/pipeline.mjs";
 
 const GITHUB_REPO_FULL_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -143,6 +143,24 @@ export function resolvePRContractFacts({ prBody, issueBody = null, linkedIssueCo
   };
 }
 
+function loadPolicyRuntimeOrExit(loadRuntime, { label, failureMessage }) {
+  let runtime;
+  try {
+    runtime = loadRuntime();
+  } catch (e) {
+    console.error(`FAIL: ${label}`);
+    console.error(`  ${e.message}`);
+    console.error(`\n${failureMessage}`);
+    process.exit(1);
+  }
+
+  if (!runtime.ok) {
+    console.error(`\n${failureMessage}`);
+    process.exit(1);
+  }
+  return runtime;
+}
+
 export function runCheckPR(roots, args = []) {
   for (const arg of args) {
     if (arg.startsWith("-")) {
@@ -174,13 +192,39 @@ export function runCheckPR(roots, args = []) {
   }
   console.log(`PR #${prNumber}: checking contract and diff (${base?.slice(0, 7)}..${head?.slice(0, 7)})`);
 
-  const runtime = loadPolicyRuntime(roots);
-  const { ajv, policy, contractSchema } = runtime;
-
-  if (!runtime.ok) {
-    console.error("\nPolicy compilation failed");
-    process.exit(1);
+  const headRuntime = loadPolicyRuntimeOrExit(
+    () => loadPolicyRuntime(roots, { label: "repo-policy.json (PR head)" }),
+    {
+      label: "repo-policy.json (PR head)",
+      failureMessage: "Proposed policy compilation failed",
+    }
+  );
+  const initialChecks = [];
+  const basePolicyRead = readBasePolicy(base, roots.repoRoot);
+  let runtime = headRuntime;
+  let trustedGovernancePaths = [];
+  if (basePolicyRead.error) {
+    initialChecks.push({
+      name: "governance-trusted-boundary",
+      check: {
+        ok: false,
+        message: `cannot establish trusted governance boundary: ${basePolicyRead.error}`,
+        hint: "check-pr requires reading repo-policy.json at the PR base via `git show <base>:repo-policy.json` so a PR cannot change the policy that evaluates itself. The boundary is intentionally not falling back to the PR head policy. Ensure the base ref is fetched and repo-policy.json is valid JSON on the base branch.",
+        details: [`base_ref: ${base}`, `base_policy_read_error: ${basePolicyRead.error}`],
+      },
+    });
+  } else {
+    runtime = loadPolicyRuntimeOrExit(
+      () => loadPolicyRuntimeFromObject(roots, basePolicyRead.policy, { label: "repo-policy.json (base)" }),
+      {
+        label: "repo-policy.json (base)",
+        failureMessage: "Base policy compilation failed",
+      }
+    );
+    trustedGovernancePaths = runtime.policy.paths?.governance_paths ?? [];
   }
+
+  const { ajv, policy, contractSchema } = runtime;
 
   const enforcement = resolveEnforcementMode({ cliValue: roots.enforcementMode, policy });
   if (!enforcement.ok) {
@@ -238,7 +282,6 @@ export function runCheckPR(roots, args = []) {
   let contract = null;
   let contractSource = contractResult.contractSource || "none";
   const issueAuthorization = contractResult.issueAuthorization || null;
-  const initialChecks = [];
   if (!contractResult.ok) {
     initialChecks.push({
       name: "change-contract",
@@ -265,23 +308,6 @@ export function runCheckPR(roots, args = []) {
   } catch (e) {
     console.error(`ERROR: ${e.message}`);
     process.exit(1);
-  }
-
-  const basePolicyRead = readBaseGovernancePaths(base, roots.repoRoot);
-  let trustedGovernancePaths;
-  if (basePolicyRead.error) {
-    initialChecks.push({
-      name: "governance-trusted-boundary",
-      check: {
-        ok: false,
-        message: `cannot establish trusted governance boundary: ${basePolicyRead.error}`,
-        hint: "check-pr requires reading repo-policy.json at the PR base via `git show <base>:repo-policy.json` so a PR cannot narrow the governance perimeter in the same diff. The boundary is intentionally not falling back to the PR head policy. Ensure the base ref is fetched and repo-policy.json is valid JSON on the base branch.",
-        details: [`base_ref: ${base}`, `base_policy_read_error: ${basePolicyRead.error}`],
-      },
-    });
-    trustedGovernancePaths = [];
-  } else {
-    trustedGovernancePaths = basePolicyRead.governancePaths ?? [];
   }
 
   const summary = runPolicyPipeline({

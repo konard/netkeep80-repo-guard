@@ -35,22 +35,28 @@ export function readFileAtRef(ref, path, cwd) {
   return runGit(["show", `${ref}:${path}`], { cwd });
 }
 
-export function readBaseGovernancePaths(base, cwd, policyPath = "repo-policy.json") {
-  if (!base) return { governancePaths: null, error: "no_base_ref" };
+export function readBasePolicy(base, cwd, policyPath = "repo-policy.json") {
+  if (!base) return { policy: null, error: "no_base_ref" };
   let raw;
   try {
     raw = readFileAtRef(base, policyPath, cwd);
   } catch (e) {
-    return { governancePaths: null, error: `git_show_failed: ${e.message}` };
+    return { policy: null, error: `git_show_failed: ${e.message}` };
   }
-  if (raw == null) return { governancePaths: null, error: "empty_base_policy" };
+  if (raw == null) return { policy: null, error: "empty_base_policy" };
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
-    return { governancePaths: null, error: `base_policy_parse_error: ${e.message}` };
+    return { policy: null, error: `base_policy_parse_error: ${e.message}` };
   }
-  const list = parsed?.paths?.governance_paths;
+  return { policy: parsed, error: null };
+}
+
+export function readBaseGovernancePaths(base, cwd, policyPath = "repo-policy.json") {
+  const result = readBasePolicy(base, cwd, policyPath);
+  if (result.error) return { governancePaths: null, error: result.error };
+  const list = result.policy?.paths?.governance_paths;
   if (!Array.isArray(list)) return { governancePaths: [], error: null };
   return { governancePaths: list, error: null };
 }

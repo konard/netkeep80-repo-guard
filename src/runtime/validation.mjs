@@ -48,15 +48,15 @@ export function validationCheck(ajv, schema, data, label) {
   };
 }
 
-export function loadPolicyRuntime(roots, options = {}) {
+export function loadPolicyRuntimeFromObject(roots, rawPolicy, options = {}) {
   const policySchema = loadJSON(resolve(roots.packageRoot, "schemas/repo-policy.schema.json"));
   const contractSchema = loadJSON(resolve(roots.packageRoot, "schemas/change-contract.schema.json"));
-  const rawPolicy = loadJSON(resolve(roots.repoRoot, "repo-policy.json"));
   const ajv = createAjv();
   const quiet = options.quiet || false;
+  const label = options.label || "repo-policy.json";
 
   let ok = true;
-  ok = validate(ajv, policySchema, rawPolicy, "repo-policy.json", { quiet }) && ok;
+  ok = validate(ajv, policySchema, rawPolicy, label, { quiet }) && ok;
 
   const profileResult = resolvePolicyProfile(rawPolicy);
   const policy = profileResult.policy;
@@ -88,4 +88,9 @@ export function loadPolicyRuntime(roots, options = {}) {
   }
 
   return { ok, ajv, policy, contractSchema };
+}
+
+export function loadPolicyRuntime(roots, options = {}) {
+  const rawPolicy = loadJSON(resolve(roots.repoRoot, "repo-policy.json"));
+  return loadPolicyRuntimeFromObject(roots, rawPolicy, options);
 }

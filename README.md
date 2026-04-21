@@ -162,12 +162,16 @@ repo-guard check-diff --format summary --base main --head feature
 
 1. Читает `GITHUB_EVENT_PATH`.
 2. Берет базовый и головной SHA из события pull request.
-3. Извлекает контракт из тела PR.
-4. Если контракта в PR нет, ищет ровно одну связанную issue по `Fixes #N`,
+3. Валидирует `repo-policy.json` из рабочей копии PR как предлагаемую будущую
+   политику.
+4. Читает `repo-policy.json` из базового SHA PR и использует именно эту
+   доверенную политику для проверки текущего diff.
+5. Извлекает контракт из тела PR.
+6. Если контракта в PR нет, ищет ровно одну связанную issue по `Fixes #N`,
    `Closes #N` или `Resolves owner/repo#N` и пробует взять контракт из issue.
-5. Валидирует контракт по `schemas/change-contract.schema.json`.
-6. Проверяет `git diff base...head` тем же конвейером политики, что и
-   `check-diff`.
+7. Валидирует контракт по `schemas/change-contract.schema.json`.
+8. Проверяет `git diff base...head` тем же конвейером политики, что и
+   `check-diff`, но с политикой базовой ветки.
 
 Если PR ссылается на несколько issues без контракта в PR, команда завершается
 ошибкой `issue_link_ambiguous`. Для резервного чтения связанной issue нужен
@@ -289,7 +293,7 @@ jobs:
 
 | Поле | Поведение сейчас |
 | --- | --- |
-| `paths.governance_paths` | Блокирует правки перечисленных файлов управления, пока в теле связанного issue не появится блок `repo-guard-yaml` с `authorized_governance_paths`. Граница читается из `repo-policy.json` базовой ветки, а поле `authorized_governance_paths` в PR-body-контракте игнорируется (см. раздел «Санкционирование изменений политики») |
+| `paths.governance_paths` | Блокирует правки перечисленных файлов управления, пока в теле связанного issue не появится блок `repo-guard-yaml` с `authorized_governance_paths`. В `check-pr` вся runtime-политика читается из `repo-policy.json` базовой ветки, а поле `authorized_governance_paths` в PR-body-контракте игнорируется (см. раздел «Санкционирование изменений политики») |
 | `paths.public_api` | Зарезервировано; непустое значение дает предупреждение |
 | `contract.overrides` | Зарезервировано; непустое значение дает предупреждение |
 
@@ -748,11 +752,17 @@ repo-guard doctor --integration --format summary
   доверенный, потому что редактирование issue обычно требует прав, которых у
   ИИ-агента нет.
 
-Правило сравнивает список тронутых файлов с `paths.governance_paths`, причём
-этот список читается из `repo-policy.json` **базовой ветки** (trusted base
-policy), а не из версии в текущем PR. Это закрывает обходной путь, при котором
-PR сначала сужает `governance_paths`, а потом правит файл, уже выпавший из
-нового периметра, — граница фиксируется до того, как PR успеет её подправить.
+В режиме `check-pr` весь runtime policy читается из `repo-policy.json`
+**базовой ветки** (trusted base policy), а не из версии в текущем PR. Поэтому PR
+не может ослабить `diff_rules`, `size_rules`, `content_rules` или другие
+ограничения, которые применяются к его собственному diff. Версия политики из PR
+head всё равно валидируется как предлагаемое будущее состояние, но вступает в
+силу только после merge.
+
+Семейство `governance-paths` сравнивает список тронутых файлов с
+`paths.governance_paths` из trusted base policy. Это закрывает обходной путь,
+при котором PR сначала сужает `governance_paths`, а потом правит файл, уже
+выпавший из нового периметра.
 
 `authorized_governance_paths`, указанный в контракте тела PR, намеренно
 игнорируется как источник авторизации (диагностика отметит его как
@@ -780,9 +790,8 @@ expected_effects:
 Если `repo-policy.json` базовой ветки не удаётся прочитать или распарсить
 (`git show <base>:repo-policy.json` падает, JSON невалиден и т. п.),
 `check-pr` **намеренно завершается ошибкой** (`governance-trusted-boundary`)
-вместо отката на head policy текущего PR. Без доверенной границы
-governance-решение не принимается: лучше hard fail, чем доверять mutable
-PR state.
+вместо отката на head policy текущего PR. Без доверенной base policy runtime
+не принимает решение по PR: лучше hard fail, чем доверять mutable PR state.
 
 CI также запускает:
 
