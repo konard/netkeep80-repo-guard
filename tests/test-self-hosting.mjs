@@ -409,7 +409,6 @@ describe("repo-guard self-hosting capability coverage matrix", () => {
       "trace_rules",
       "profile",
       "profile_overrides",
-      "policy_delta_rules",
     ]);
 
     for (const property of schemaProps) {

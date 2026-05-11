@@ -154,11 +154,6 @@
       "profile_requirements-strict": {
         "status": "not_self_hosted",
         "rationale": "The built-in profile requires requirements/*.json canonical files which this tooling repo does not have. Adding a fake requirements/ directory would be the exact fake coverage this dogfooding effort rejects. Covered by docs/requirements-strict-profile.md and tests/test-policy-profiles.mjs."
-      },
-      "policy_delta_rules": {
-        "status": "self_used",
-        "self_use": ".github/workflows/ci.yml:Run PR policy check",
-        "notes": "Repo-guard's own check-pr step compares base vs head repo-policy.json on every PR; relaxations to size_rules/diff_rules/forbidden/governance_paths are blocked unless the linked issue carries allow_policy_relaxation and a trusted authorizer signs off."
       }
     }
   }

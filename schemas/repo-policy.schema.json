@@ -331,24 +331,6 @@
           }
         }
       }
-    },
-    "policy_delta_rules": {
-      "type": "object",
-      "description": "Optional configuration for the policy-relaxation check. The check runs automatically in check-pr whenever a base policy can be read; the fields below tune which surfaces are considered protected and which governance label is trusted.",
-      "additionalProperties": false,
-      "properties": {
-        "protected_surfaces": {
-          "type": "array",
-          "description": "Named surfaces (from policy.surfaces) treated as protected product/code/generated surfaces. A PR that relaxes policy and touches any protected surface in the same diff is blocked. Defaults to source, tests, schemas when omitted.",
-          "items": { "type": "string", "minLength": 1 },
-          "uniqueItems": true
-        },
-        "governance_approved_label": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Maintainer-applied label that signals trusted authorization for policy relaxation. Defaults to governance-approved."
-        }
-      }
     }
   },
   "definitions": {

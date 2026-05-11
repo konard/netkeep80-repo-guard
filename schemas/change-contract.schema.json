@@ -104,12 +104,6 @@
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
-    "allow_policy_relaxation": {
-      "type": "array",
-      "description": "JSON-pointer entries listing the parts of repo-policy.json that this change is sanctioned to relax (for example /size_rules/kernel-subtree-max-bytes/max). Like authorized_governance_paths, this is a privileged field: it only unlocks policy relaxation when present in the repo-guard contract carried by the linked issue body and confirmed by a trusted authorizer (write/maintain/admin permission, a governance-approved label, a CODEOWNERS approval, or a configured trusted team). Declared in the PR body it is ignored at runtime so an AI agent cannot self-authorize policy weakening.",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true
-    },
     "must_touch": {
       "type": "array",
       "items": { "type": "string" },
